@@ -1,0 +1,379 @@
+---
+title: "CPFV_pelagics_data_clean"
+author: "Vanessa Van Deusen"
+date: "2023-11-06"
+output: html_document
+---
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
+PI: Jenny Selgrath
+data input: cpfv_merged_no_pii.csv; blocks.csv; port_key.csv; species_key.csv
+** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
+data output: CDFW_1980_2020_cpfv_logbook_data.Rds
+
+#Inital setup
+## Loading libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
+```
+
+## Importing data
+```{r}
+cpfv_merged_no_pii <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
+blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/blocks.csv")
+port_key <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/port_key.csv")
+species_key<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/sp_list_key.csv")
+```
+
+## Formatting data
+```{r}
+block_key <- blocks %>% sf::st_drop_geometry()%>% rename("block_id"= "BLOCK10_ID", "block_areaMi"= "AreaMi", "block_Acres"="Acres", "block_shape_area"= "Shape__Area", "block_shape_length"= "Shape__Length")
+port_key<- port_key %>% rename(port_code= PortID, port= PortName, port_complex= PortGroup_IOPAC)
+port_key<-na.omit(port_key)
+species_key<-species_key %>% rename("species_code"= "SpeciesID")%>% clean_names("snake")
+species_key$species_code<-as.numeric(species_key$species_code)
+
+```
+
+
+#-----
+#Demographics on species, methods, and bait (dataset from 1980-2020)
+## Which species groups are most frequently targeted by recreational fishers?
+```{r}
+target_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(TargetSpeciesLingcod:TargetSpeciesMiscBay))))
+head(target_n)
+```
+
+## Which fishing method is most frequently used by recreational fishers?
+```{r}
+method_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(FishingMethodTrolling:FishingMethodOther))))
+head(method_n)
+```
+## Which bait is most frequently used by recreational fishers?
+```{r}
+bait_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(BaitUsedAnchoviesLive:BaitUsedOtherDead))))
+head(bait_n)
+```
+
+##Table format
+###Specific species 
+```{r}
+table(cpfv_merged_no_pii$TargetSpeciesLingcod)
+table(cpfv_merged_no_pii$TargetSpeciesOther)
+table(cpfv_merged_no_pii$TargetSpeciesRockfishes)
+table(cpfv_merged_no_pii$TargetSpeciesSalmon)
+table(cpfv_merged_no_pii$TargetSpeciesSharks)
+table(cpfv_merged_no_pii$TargetSpeciesStripedBass)
+table(cpfv_merged_no_pii$TargetSpeciesSturgeon)
+table(cpfv_merged_no_pii$TargetSpeciesTuna)
+table(cpfv_merged_no_pii$TargetSpeciesPotluck)
+table(cpfv_merged_no_pii$TargetSpeciesMiscCoastal)
+table(cpfv_merged_no_pii$TargetSpeciesMiscBay)
+table(cpfv_merged_no_pii$TargetSpeciesMiscOffshore)
+```
+
+###Specific method
+```{r}
+table(cpfv_merged_no_pii$FishingMethodTrolling)
+table(cpfv_merged_no_pii$FishingMethodAnchored)
+table(cpfv_merged_no_pii$FishingMethodDiving)
+table(cpfv_merged_no_pii$FishingMethodDrifting)
+table(cpfv_merged_no_pii$FishingMethodLightTackle)
+table(cpfv_merged_no_pii$FishingMethodMooching)
+table(cpfv_merged_no_pii$FishingMethodOther)
+```
+
+###Specific bait
+```{r}
+table(cpfv_merged_no_pii$BaitUsedAnchoviesDead)
+table(cpfv_merged_no_pii$BaitUsedAnchoviesLive)
+table(cpfv_merged_no_pii$BaitUsedOtherDead)
+table(cpfv_merged_no_pii$BaitUsedOtherLive)
+table(cpfv_merged_no_pii$BaitUsedSardinesDead)
+table(cpfv_merged_no_pii$BaitUsedSardinesLive)
+table(cpfv_merged_no_pii$BaitUsedSquidDead)
+table(cpfv_merged_no_pii$BaitUsedSquidLive)
+```
+
+
+
+
+#-----
+#Clean data 
+```{r}
+ data_clean <- cpfv_merged_no_pii %>% 
+  janitor::clean_names("snake") %>% 
+  rename(date=log_date,
+         month=log_month,         
+         day=log_day,
+         year=log_year,
+         block_id=block,
+         hm_fished=hours_minutes_fished,
+         comm_name_orig=species, 
+         temp_f=temperature,
+         depth_ft=depth,
+         n_fishers=number_of_fishers,
+         hrs_fished=hours_fished,
+         n_kept=number_kept,
+         n_released=number_released,
+         n_lost_to_sea_lions=number_lost_to_sea_lions,
+         n_caught_by_crew=number_of_fish_caught_by_crew,
+         n_crew_fished=number_of_crew_fished) %>% 
+   mutate(date=lubridate::mdy(date),
+         date_received=lubridate::mdy(date_received),
+         date_submitted=lubridate::mdy(date_submitted)) %>% 
+  mutate(across(.cols=month:year, .fns=as.numeric))  %>%
+  mutate(port_code=as.numeric(port_code)) %>%
+  left_join(port_key, by="port_code", relationship = "many-to-one", na_matches = "never" ) %>%
+  mutate(port=ifelse(is.na(port), "Invalid", port)) %>%
+  mutate(trip_type=stringr::str_to_sentence(trip_type)) %>%
+  mutate(block_id=as.numeric(block_id)) %>%
+  left_join(block_key %>% select("block_id", "block_areaMi", "block_Acres"), by="block_id") %>%
+  mutate(depth_ft=as.numeric(depth_ft) %>% abs(.)) %>% 
+  mutate(temp_f=as.numeric(temp_f))%>%
+  mutate(n_fishers=as.numeric(n_fishers), hrs_fished=as.numeric(hrs_fished)) %>%
+  #mutate(hm_fished=stringr::str_squish(hm_fished), hm_fished=recode(hm_fished, "800"="", "100"="", "145"="", "600"="", "300"="", "830"="", "730"="", "330"="", "251"="", "615"=""),hm_fished=ifelse(hm_fished=="", NA, hm_fished)) 
+  ##I am not sure what this code is doing
+  mutate(comm_name_orig=stringr::str_squish(comm_name_orig))%>%
+  mutate(species_code=recode(species_code, 
+                             "Oarfish"="") %>% as.numeric(.)) %>%
+  left_join(species_key %>% select(species_code, species_name), by=c("species_code")) %>%
+  mutate(species_name=ifelse(species_code==2665 , "Oarfish", species_name))%>%
+  mutate(across(.cols=n_kept:n_crew_fished, .fns=as.numeric)) %>%
+  mutate(across(.cols=n_kept:n_caught_by_crew, .fns=function(x){ifelse(is.na(x), 0, x)}))%>% 
+  mutate(target_species_rockfishes=ifelse(!is.na(target_species_rockfishes), "Rockfish", "NA"),
+         target_species_misc_coastal=ifelse(!is.na(target_species_misc_coastal), "Misc. coastal", "NA"),
+         target_species_other=ifelse(!is.na(target_species_other), "Other", "NA"),
+         target_species_lingcod=ifelse(!is.na(target_species_lingcod), "Lingcod", "NA"),
+         target_species_tuna=ifelse(!is.na(target_species_tuna), "Tuna", "NA"),
+         target_species_misc_offshore=ifelse(!is.na(target_species_misc_offshore), "Misc. offshore", "NA"),
+         target_species_salmon=ifelse(!is.na(target_species_salmon), "Salmon", "NA"),
+         target_species_potluck=ifelse(!is.na(target_species_potluck), "Potluck", "NA"),
+         target_species_striped_bass=ifelse(!is.na(target_species_striped_bass), "Striped bass", "NA"),
+         target_species_sharks=ifelse(!is.na(target_species_sharks), "Sharks", "NA"),
+         target_species_sturgeon=ifelse(!is.na(target_species_sturgeon), "Sturgeon", "NA"),
+         target_species_misc_bay=ifelse(!is.na(target_species_misc_bay), "Misc. bay", "NA"))%>%
+   mutate(target_species=paste(target_species_rockfishes, target_species_misc_coastal, 
+                              target_species_other, target_species_lingcod, 
+                              target_species_tuna, target_species_misc_offshore, 
+                              target_species_salmon, target_species_potluck, 
+                              target_species_striped_bass, target_species_sharks, 
+                              target_species_sturgeon, target_species_misc_bay, sep=", ")) %>% 
+  mutate(target_species=gsub("NA, |, NA", "", target_species)) %>% ## not completely sure how this works ("NA, |, NA")
+  select(-c(target_species_lingcod:target_species_misc_bay)) %>%
+  mutate(fishing_method_anchored=ifelse(!is.na(fishing_method_anchored), "Anchored", "NA"),
+         fishing_method_drifting=ifelse(!is.na(fishing_method_drifting), "Drifting", "NA"),
+         fishing_method_trolling=ifelse(!is.na(fishing_method_trolling), "Trolling", "NA"),
+         fishing_method_light_tackle=ifelse(!is.na(fishing_method_light_tackle), "Light tackle", "NA"),
+         fishing_method_diving=ifelse(!is.na(fishing_method_diving), "Diving", "NA"),
+         fishing_method_other=ifelse(!is.na(fishing_method_other), "Other", "NA"),
+         fishing_method_mooching=ifelse(!is.na(fishing_method_mooching), "Mooching", "NA")) %>% 
+  mutate(fishing_method=paste(fishing_method_anchored, fishing_method_drifting, 
+                              fishing_method_trolling, fishing_method_light_tackle, 
+                              fishing_method_diving, fishing_method_other, 
+                              fishing_method_mooching, sep=", "))%>%
+  mutate(fishing_method=gsub("NA, |, NA", "", fishing_method)) %>% 
+  select(-c(fishing_method_trolling:fishing_method_other))%>% 
+  mutate(bait_used_squid_dead=ifelse(!is.na(bait_used_squid_dead), "Squid (dead)", "NA"),
+         bait_used_sardines_live=ifelse(!is.na(bait_used_sardines_live), "Sardines (live)", "NA"),
+         bait_used_anchovies_live=ifelse(!is.na(bait_used_anchovies_live), "Anchovies (live)", "NA"),
+         bait_used_squid_live=ifelse(!is.na(bait_used_squid_live), "Squid (live)", "NA"),
+         bait_used_other_dead=ifelse(!is.na(bait_used_other_dead), "Other (dead)", "NA"),
+         bait_used_anchovies_dead=ifelse(!is.na(bait_used_anchovies_dead), "Anchovies (dead)", "NA"),
+         bait_used_sardines_dead=ifelse(!is.na(bait_used_sardines_dead), "Sardines (dead)", "NA"), 
+         bait_used_other_live=ifelse(!is.na(bait_used_other_live), "Other (live)", "NA")) %>% 
+  mutate(bait_used=paste(bait_used_squid_dead, bait_used_sardines_live, 
+                         bait_used_anchovies_live, bait_used_squid_live, 
+                         bait_used_other_dead, bait_used_anchovies_dead, 
+                         bait_used_sardines_dead, bait_used_other_live, sep=", ")) %>% 
+  mutate(bait_used=gsub("NA, |, NA", "", bait_used)) %>% 
+  select(-c(bait_used_anchovies_live:bait_used_other_dead))
+data_clean<-data_clean%>%
+  mutate(ID=seq.int(nrow(data_clean)))%>%
+  mutate(logbook_id_use=paste(ID, date, sep="-"))%>%
+  select(logbook_id_use, 
+         year, month, day, 
+         date, date_submitted, date_received,
+         port_complex, port_code, port,
+         no_activity_month,
+         trip_type, non_paying, descending_device, bird_interaction,
+         target_species, fishing_method, bait_used, 
+         block_id,
+         depth_ft, temp_f, 
+         departure_time, return_time, hm_fished, hrs_fished, n_fishers, n_crew_fished,
+         species_code, species_name,
+         n_kept, n_released, n_lost_to_sea_lions, n_caught_by_crew,
+         everything())
+
+```
+
+# Build Logbook ID
+```{r}
+# Build logbook id
+log_key <- data_clean %>% 
+  group_by(year, date,
+           port_complex, port, port_code, 
+           no_activity_month, trip_type, non_paying, 
+           departure_time, return_time,
+           block_id,
+           depth_ft, temp_f,
+           hm_fished, hrs_fished,
+           n_fishers, n_crew_fished, logbook_id_use) %>% 
+  summarize(n_kept=sum(n_kept)) %>% 
+  ungroup()
+# Are the logbook ids unique? Mine should be, there's shouldn't be
+freeR::which_duplicated(log_key$logbook_id_use)
+
+# Does number of fishers always exceed number of crew?
+sum(log_key$n_crew_fished < log_key$n_fishers, na.rm=T)
+```
+
+#Inspect Data
+```{r}
+# Inspect data
+################################################################################
+
+# Inspect
+head(data_clean)
+str(data_clean)
+# na_check <- freeR::complete(data)
+# (100 - na_check / nrow(data) * 100) %>% round(., 2)
+
+# Date
+range(data_clean$date)
+range(data_clean$year)
+range(data_clean$month)
+range(data_clean$day)
+range(data_clean$date_received, na.rm=T)
+range(data_clean$date_submitted, na.rm=T) # 1900-01-01 = NA?
+range(data_clean$temp_f, na.rm=T)
+
+# Ports
+port_key_check <- data_clean %>% 
+  select(port_complex, port_code, port) %>% 
+  unique() %>% 
+  arrange(port_code)
+
+port_invalid<-data_clean%>%
+  subset(port=="Invalid")%>%
+  select(port_complex, port_code, port)%>%
+  unique() %>% 
+  arrange(port_code)
+#write.csv(port_invalid_full, file.path(path_out, "port_invalid_full.csv"))
+
+# Block
+block_key_check <- data_clean %>% 
+  select(block_id) %>% 
+  unique()
+sort(block_key_check$block_id[is.na(block_key_check$block_type)])
+blocks_wrong<-data_clean%>%
+  subset(block_id>897)%>%
+  select(block_id)%>%
+ # unique()%>%
+  arrange(block_id)
+#write.csv(blocks_wrong, file.path(path_out, "blocks_wrong.csv"))
+
+##Looking specifically at one repeatedly misentered block ID that was re-entered 172 times 
+block1032_wrong<-data_clean%>% subset(block_id==1032)
+write.csv(block1032_wrong, file.path(path_out, "block1032_wrong.csv"))
+
+# Trip type
+sort(unique(data_clean$trip_type))
+table(data_clean$non_paying) # N, Y
+table(data_clean$no_activity_month)
+
+# Descending device
+table(data_clean$descending_device) # B, N, Y
+table(data_clean$bird_interaction) # B, N, Y
+
+# Species
+sort(unique(data_clean$species_code))
+sort(unique(data_clean$species_name))
+species_key_check <- data_clean %>% 
+  select(species_code,species_name) %>% 
+  unique()
+sort(species_key_check$species_code[is.na(species_key_check$species_name)])
+
+species_name_missing<-data_clean%>%
+  subset(is.na(data_clean$species_name))%>%
+  select(species_code, species_name) %>%
+  unique()%>%
+  arrange(species_code)
+#write.csv(species_name_missing, file.path(path_out, "species_name_missing.csv"))
+
+# Temperature
+ggplot(data_clean, aes(y=temp_f)) +
+  geom_boxplot() +
+  labs(y="Temperature (°F)") +
+  lims(y=c(0,100)) +
+  theme_bw()
+
+hist(data_clean$temp_f)
+temp_mistake<-subset(data_clean, temp_f> 100)
+view(temp_mistake)
+#write.csv(temp_mistake, file.path(path_out, "temp_mistake.csv"))
+
+
+# Depth
+ggplot(data_clean, aes(y=depth_ft)) +
+  geom_boxplot() +
+  labs(y="Depth (feet)") +
+  lims(y=c(0, 500)) +
+  theme_bw()
+hist(data_clean$depth_ft)
+
+# Times
+freeR::uniq(data_clean$departure_time)
+freeR::uniq(data_clean$return_time)
+freeR::uniq(data_clean$hm_fished)
+
+# Inspect duration
+duration_key <- data_clean %>% 
+  select(hm_fished, hrs_fished) %>% 
+  unique() %>% 
+  arrange(hrs_fished)
+#Dont understand what is purpose of below
+#duration_key_check <- duration_key %>% 
+ # mutate(nchar=nchar(hm_fished),
+  #       colon_yn=grepl(":", hm_fished)) %>% 
+  #rowwise() %>% 
+  #mutate(hrs_fished2=conv_hm_to_hr(hm_fished)) %>% 
+#  ungroup() %>% 
+ # mutate(hrs_check=near(hrs_fished, hrs_fished2, tol=0.0001))
+
+# Target species, fishing method, bait used
+table(data_clean$target_species)
+table(data$fishing_method)
+table(data$bait_used)
+
+```
+
+# Didn't do-- Free Final processing
+```{r}
+
+################################################################################
+
+# Final format
+data_out <- data %>% 
+  # Add HR calculated from HM
+  # (proven to be more comprehensive and identical)
+  left_join(duration_key_check %>% select(hm_fished, hrs_fished2), by="hm_fished") %>% 
+  select(-hrs_fished) %>% 
+  rename(hrs_fished=hrs_fished2) %>% 
+  select(filename:hm_fished, hrs_fished, everything()) 
+
+```
+
+#Export
+```{r}
+saveRDS(data_clean, file.path(path_out, "CDFW_1980_2020_cpfv_logbook_data.Rds"))
+```
+
