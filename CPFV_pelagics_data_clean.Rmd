@@ -6,7 +6,7 @@ output: html_document
 ---
 project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
 PI: Jenny Selgrath
-data input: cpfv_merged_no_pii.csv; blocks.csv; port_key.csv; species_key.csv
+data input: cpfv_merged_no_pii.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
 ** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
 data output: CDFW_1980_2020_cpfv_logbook_data.Rds
 
@@ -27,18 +27,30 @@ path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/D
 
 ## Importing data
 ```{r}
-cpfv_merged_no_pii <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
+cpfv_merged_no_pii<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
 blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/blocks.csv")
-port_key <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/port_key.csv")
-species_key<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/sp_list_key.csv")
+port_DF <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_port_historic.csv")
+species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_Species_historic.csv")
 ```
 
 ## Formatting data
 ```{r}
-block_key <- blocks %>% sf::st_drop_geometry()%>% rename("block_id"= "BLOCK10_ID", "block_areaMi"= "AreaMi", "block_Acres"="Acres", "block_shape_area"= "Shape__Area", "block_shape_length"= "Shape__Length")
-port_key<- port_key %>% rename(port_code= PortID, port= PortName, port_complex= PortGroup_IOPAC)
-port_key<-na.omit(port_key)
-species_key<-species_key %>% rename("species_code"= "SpeciesID")%>% clean_names("snake")
+cpfv_merged_no_pii$SpeciesCode<-as.numeric(cpfv_merged_no_pii$SpeciesCode)
+
+block_key <- blocks %>% 
+  sf::st_drop_geometry()%>% 
+  rename("block_id"= "BLOCK10_ID", "block_areaMi"= "AreaMi", "block_Acres"="Acres", "block_shape_area"= "Shape__Area", "block_shape_length"= "Shape__Length")
+
+port_key<- port_DF %>% 
+  clean_names("snake")%>%
+  rename(port= port_name, port_complex= port_area)%>%
+  select(-c(x5))
+
+
+species_key<-species_DF %>% 
+  clean_names("snake") %>%
+  rename("species_code"= "species_id", "species_discontinue_date"= "discontinue_date")%>% 
+  select(-c(x6))
 species_key$species_code<-as.numeric(species_key$species_code)
 
 ```
@@ -143,10 +155,9 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
   #mutate(hm_fished=stringr::str_squish(hm_fished), hm_fished=recode(hm_fished, "800"="", "100"="", "145"="", "600"="", "300"="", "830"="", "730"="", "330"="", "251"="", "615"=""),hm_fished=ifelse(hm_fished=="", NA, hm_fished)) 
   ##I am not sure what this code is doing
   mutate(comm_name_orig=stringr::str_squish(comm_name_orig))%>%
-  mutate(species_code=recode(species_code, 
-                             "Oarfish"="") %>% as.numeric(.)) %>%
-  left_join(species_key %>% select(species_code, species_name), by=c("species_code")) %>%
-  mutate(species_name=ifelse(species_code==2665 , "Oarfish", species_name))%>%
+ # mutate(species_code=recode(species_code, "Oarfish"="") %>% as.numeric(.)) %>%
+  left_join(species_key %>% select(species_code, species_name, species_group,species_discontinue_date), by=c("species_code")) %>%
+  #mutate(species_name=ifelse(species_code==2665 , "Oarfish", species_name))%>%
   mutate(across(.cols=n_kept:n_crew_fished, .fns=as.numeric)) %>%
   mutate(across(.cols=n_kept:n_caught_by_crew, .fns=function(x){ifelse(is.na(x), 0, x)}))%>% 
   mutate(target_species_rockfishes=ifelse(!is.na(target_species_rockfishes), "Rockfish", "NA"),
@@ -195,8 +206,7 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
                          bait_used_other_dead, bait_used_anchovies_dead, 
                          bait_used_sardines_dead, bait_used_other_live, sep=", ")) %>% 
   mutate(bait_used=gsub("NA, |, NA", "", bait_used)) %>% 
-  select(-c(bait_used_anchovies_live:bait_used_other_dead))
-data_clean<-data_clean%>%
+  select(-c(bait_used_anchovies_live:bait_used_other_dead))%>%
   mutate(ID=seq.int(nrow(data_clean)))%>%
   mutate(logbook_id_use=paste(ID, date, sep="-"))%>%
   select(logbook_id_use, 
@@ -265,7 +275,7 @@ port_key_check <- data_clean %>%
 port_invalid<-data_clean%>%
   subset(port=="Invalid")%>%
   select(port_complex, port_code, port)%>%
-  unique() %>% 
+  unique()%>%
   arrange(port_code)
 #write.csv(port_invalid_full, file.path(path_out, "port_invalid_full.csv"))
 
@@ -276,8 +286,8 @@ block_key_check <- data_clean %>%
 sort(block_key_check$block_id[is.na(block_key_check$block_type)])
 blocks_wrong<-data_clean%>%
   subset(block_id>897)%>%
-  select(block_id)%>%
- # unique()%>%
+  select(block_id, year)%>%
+  unique()%>%
   arrange(block_id)
 #write.csv(blocks_wrong, file.path(path_out, "blocks_wrong.csv"))
 
@@ -298,15 +308,21 @@ table(data_clean$bird_interaction) # B, N, Y
 sort(unique(data_clean$species_code))
 sort(unique(data_clean$species_name))
 species_key_check <- data_clean %>% 
-  select(species_code,species_name) %>% 
+  select(species_code,species_name, comm_name_orig) %>% 
   unique()
 sort(species_key_check$species_code[is.na(species_key_check$species_name)])
 
 species_name_missing<-data_clean%>%
   subset(is.na(data_clean$species_name))%>%
-  select(species_code, species_name) %>%
-  unique()%>%
+  select(species_code, species_name, comm_name_orig) %>%
+ # unique()%>%
   arrange(species_code)
+###comparing species names to comm_name_orig
+species_key_check_against<-data_clean%>%
+  select(species)
+
+###break down of missing species names 
+table(species_name_missing$comm_name_orig)
 #write.csv(species_name_missing, file.path(path_out, "species_name_missing.csv"))
 
 # Temperature
