@@ -1,0 +1,158 @@
+---
+title: "CPFV_pelagics_analyze_visualize"
+author: "Van Deusen"
+date: "2023-11-29"
+output: html_document
+---
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
+PI: Jenny Selgrath
+data input: CDFW_1980_2020_cpfv_logbook_data.Rds
+** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
+data output:  
+
+#Inital setup
+## Loading libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
+```
+
+## Importing data
+```{r cars}
+CPFV_data<-readRDS("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_projects/CPFV_pelagics/Data/CDFW_1980_2020_cpfv_logbook_data.Rds")
+
+blocks <- read_csv("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_projects/CPFV_pelagics/Data/blocks.csv")
+```
+
+## Subsetting by MPA blocks
+Footprint= 707 and 708
+Gull island= 710 and 709
+Santa Barbara= 764 and 765
+```{r}
+CPFV_allmpa<- CPFV_data%>% subset(block_id==707|block_id==708|block_id==710|block_id==709|block_id==764|block_id==765)
+CPFV_footprint<-CPFV_data%>% subset(block_id==707|block_id==708)
+CPFV_gullisland<- CPFV_data%>% subset(block_id==710|block_id==709)
+CPFV_santabarbara<- CPFV_data%>% subset(block_id==764|block_id==765)
+```
+
+
+
+##Checking for species
+```{r}
+##Swordfish
+swordfish_code<-subset(CPFV_data, species_code=="91")
+#should put in cleaning code:
+swordfish_code$total_caught<-swordfish_code$n_kept+swordfish_code$n_released+swordfish_code$n_lost_to_sea_lions+swordfish_code$n_caught_by_crew
+swordfish_aggregate_block<-aggregate(swordfish_code$total_caught, by=list(block_id=swordfish_code$block_id), FUN=sum)
+swordfish_aggregate_block<-rename(swordfish_aggregate_block, "total_caught"="x")
+
+#write.csv(swordfish_aggregate_block,file='\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/swordfish_aggregate_block.csv')
+
+```
+
+Pelagic species:  Barracuda, California; Bonito, Pacific; Anchovy, northern; dolphin (fish); Mackerel, jack; Mackerel, Pacific;  Marlin, striped; Mackerel, unspecified; Opah; Seabass, white; Shark, blue;Shark, shortfin mako; Shark, thresher; Tuna, albacore; Tuna, bluefin; Tuna, skipjack; Tuna, skipjack, black; Tuna, unspecified ; Tuna, yellowfin; Yellowtail; Sardine, Pacific; 
+
+swordfish is not within subset of data 
+#Selecting pelagics species
+```{r}
+CPFV_allmpa_pelagics<-CPFV_allmpa%>% subset(comm_name_orig=="Barracuda, California"|
+                                              comm_name_orig=="Bonito, Pacific"|
+                                              comm_name_orig=="Anchovy, northern"|
+                                              comm_name_orig=="dolphin (fish)"|
+                                              comm_name_orig=="Mackerel, jack"|
+                                              comm_name_orig=="Mackerel, Pacific"|
+                                              comm_name_orig=="Marlin, striped"|
+                                              comm_name_orig=="Mackerel, unspecified"|
+                                              comm_name_orig=="Opah"|
+                                              comm_name_orig=="Seabass, white"|
+                                              comm_name_orig=="Shark, blue"|
+                                              comm_name_orig=="Shark, shortfin mako"|
+                                              comm_name_orig=="Shark, thresher"|
+                                              comm_name_orig=="Tuna, albacore"|
+                                              comm_name_orig=="Tuna, bluefin"|
+                                              comm_name_orig=="Tuna, skipjack"|
+                                              comm_name_orig=="Tuna, skipjack, black"|
+                                              comm_name_orig=="Tuna, unspecified"|
+                                              comm_name_orig=="Tuna, yellowfin"| 
+                                              comm_name_orig=="Yellowtail"|
+                                              comm_name_orig=="Sardine, Pacific")
+```
+
+#Total
+##Creating dataframe summed by year and block
+```{r}
+pelagicsmpa_total<-aggregate(CPFV_allmpa_pelagics$n_kept, by=list(year=CPFV_allmpa_pelagics$year), FUN=sum)
+pelagicsmpa_total<-rename(pelagicsmpa_total, "total"= "x")
+
+```
+
+##Graphing total trend by year
+```{r}
+ggplot(pelagicsmpa_total, aes(year, total))+ 
+  geom_col()+
+  #geom_point()+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  xlab("Year")+
+  ylab("Total Catch")+
+  ggtitle("Total pelagic catch within Gull Island, Footprint, and Santa Barbara Island MPAs")+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2004'), colour="blue")+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2007'), colour="red")
+```
+
+
+##Creating dataframe summed by year and block
+```{r}
+CPFV_allmpa_pelagics$year<-as.factor(CPFV_allmpa_pelagics$year)
+pelagicsmpa_total_block_year<-aggregate(CPFV_allmpa_pelagics$n_kept, by=list(year=CPFV_allmpa_pelagics$year, block_id=CPFV_allmpa_pelagics$block_id), FUN=sum)
+pelagicsmpa_total_block_year<-rename(pelagicsmpa_total_block_year, "total"= "x")
+```
+
+
+
+
+##Graphing total trend by block and year
+```{r}
+ggplot(pelagicsmpa_total_block_year, aes(year, total))+ 
+  geom_col()+
+  #geom_point()+
+  facet_wrap(~block_id)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2004'), colour="blue")+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2007'), colour="red")
+```
+#Species Specific
+# Create dataframe summed by species, year, and block
+```{r}
+pelagicsmpa_species_block_year<-aggregate(CPFV_allmpa_pelagics$n_kept, by=list(year=CPFV_allmpa_pelagics$year, block_id=CPFV_allmpa_pelagics$block_id, species=CPFV_allmpa_pelagics$species_name), FUN=sum)
+pelagicsmpa_species_block_year<-rename(pelagicsmpa_species_block_year, "total"= "x")
+
+```
+
+##Graphing total trend by species and year
+```{r}
+ggplot(pelagicsmpa_species_block_year, aes(year, total))+ 
+  #geom_point()+
+  geom_col()+
+  facet_wrap(~species)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2004'), colour="blue")+
+  geom_vline(xintercept=which(pelagicsmpa_total$year == '2007'), colour="red")
+```
+#Mixed Effects Modeling 
+first pass at trying to graple with what mixed effects modeling means-
+```{r}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
