@@ -22,7 +22,8 @@ library(dplyr)
 library(janitor)
 library(ggplot2)
 library(lubridate)
-library(plyr)
+library(sf)
+library(tidyr)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
 ```
 
@@ -33,6 +34,12 @@ CPFV_data<-readRDS("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_pr
 blocks <- read_csv("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_projects/CPFV_pelagics/Data/blocks.csv")
 
 CINMS_fishing_blocks<- read_csv("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_projects/CPFV_pelagics/Data/CINMS_fishingblock_intersect.csv")
+
+SoCal_fishing_blocks<-st_read("C:/Users/vanessa.van.deusen/Desktop/Outputs/SoCal_fishingblocks/Pt_Conception_SoCal_Commercial_Fishing_Blocks.shp")
+SoCal_fishing_blocks<-rename(SoCal_fishing_blocks, "block_id"= "BLOCK10_ID")
+SoCal_fishing_blocks = subset(SoCal_fishing_blocks, select = -c(total) )
+
+CINMS<-st_read("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/ArcGIS_Projects/CPFV_pelagics/Data/CINMS/CINMS.shp")
 
 ```
 
@@ -56,7 +63,7 @@ CPFV_pelagics<-CPFV_data%>% subset(comm_name_orig=="Barracuda, California"|
                                               comm_name_orig=="Marlin, striped"|
                                               comm_name_orig=="Mackerel, unspecified"|
                                               comm_name_orig=="Opah"|
-                                              comm_name_orig=="Seabass, white"|
+                                              #comm_name_orig=="Seabass, white"|
                                               comm_name_orig=="Shark, blue"|
                                               comm_name_orig=="Shark, shortfin mako"|
                                               comm_name_orig=="Shark, thresher"|
@@ -71,6 +78,29 @@ CPFV_pelagics<-CPFV_data%>% subset(comm_name_orig=="Barracuda, California"|
                                               comm_name_orig=="Shark, pelagic thresher"|
                                               comm_name_orig=="Shark, white"|
                                               comm_name_orig=="Swordfish")
+
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Shark, blue" |
+                             CPFV_pelagics$species_name=="Shark, shortfin mako"|
+                             CPFV_pelagics$species_name=="Shark, thresher"| 
+                             CPFV_pelagics$species_name=="Shark, white"|
+                             CPFV_pelagics$species_name=="Shark, pelagic thresher"] <- "Shark"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Tuna, albacore"|
+                             CPFV_pelagics$species_name=="Tuna, bluefin"|
+                             CPFV_pelagics$species_name=="Tuna, skipjack"| 
+                             CPFV_pelagics$species_name=="Tuna, skipjack, black"|
+                             CPFV_pelagics$species_name=="Tuna, unspecified"|
+                             CPFV_pelagics$species_name=="Tuna, yellowfin"] <-"Tuna"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Mackerel, jack"|
+                             CPFV_pelagics$species_name=="Mackerel, Pacific"|
+                             CPFV_pelagics$species_name=="Mackerel, unspecified" ] <- "Mackerel"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Marlin, striped"|
+                             CPFV_pelagics$species_name=="Swordfish"] <- "Billfish"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Anchovy, northern"|
+                             CPFV_pelagics$species_name=="Sardine, Pacific"] <- "Baitfish"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Barracuda, California"] <- "Barracuda"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Bonito, Pacific"] <- "Bonito"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Opah"] <- "Opah"
+CPFV_pelagics$species_type[CPFV_pelagics$species_name=="Yellowtail"] <- "Yellowtail"
 ```
 
 
@@ -212,32 +242,39 @@ ggplot(pelagicsmpa_total_block_year, aes(year, total))+
 ###Year, species, block
 #### Create dataframe summed by species, year, and block
 ```{r}
-pelagicsmpa_species_block_year<-aggregate(CPFV_pelagics_mpa$n_kept, by=list(year=CPFV_pelagics_mpa$year, block_id=CPFV_pelagics_mpa$block_id, species=CPFV_pelagics_mpa$species_name), FUN=sum)
+pelagicsmpa_species_block_year<-aggregate(CPFV_pelagics_mpa$n_kept, by=list(year=CPFV_pelagics_mpa$year, block_id=CPFV_pelagics_mpa$block_id, species=CPFV_pelagics_mpa$species_name, species_type=CPFV_pelagics_mpa$species_type), FUN=sum)
 pelagicsmpa_species_block_year<-rename(pelagicsmpa_species_block_year, "total"= "x")
-pelagicsmpa_species_block_year$year<-as.factor(pelagicsmpa_species_block_year$year)
+pelagicsmpa_species_block_year$year<-as.character(pelagicsmpa_species_block_year$year)
 
 ```
 
 ####**Graphing total trend by species and year
+#####Bar graph
 ```{r}
-ggplot(pelagicsmpa_species_block_year, aes(year, total, fill=species))+ 
+pelagicsmpa_species_block_year$year<-as.numeric(pelagicsmpa_species_block_year$year)
+ggplot(pelagicsmpa_species_block_year, aes(year, total, fill=species_type))+ 
   #geom_point()+
   geom_col()+
-  #facet_wrap(~species)+
+  #facet_wrap(~species_group)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
   xlab("Year")+
   ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(legend.text=element_text(size=7))+
-  geom_vline(xintercept=which(pelagicsmpa_species_block_year$year == "2004"), colour="black", size=1)+
-  geom_vline(xintercept=which(pelagicsmpa_species_block_year$year == "2007"), colour="black", size=1)
-  geom_vline(xintercept=which(CPFV_pelagics_mpa$year == '1982'), colour="black", size=1, linetype=3)+
-  geom_vline(xintercept=which(CPFV_pelagics_mpa$year == '1991'), colour="black", size=1, linetype=3)+
-  geom_vline(xintercept=which(CPFV_pelagics_mpa$year == '1986'), colour="black", size=1, linetype=3)+
-  geom_vline(xintercept=which(CPFV_pelagics_mpa$year == '1997'), colour="black", size=1, linetype=3)
-
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsmpa_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsmpa_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime in CDFW fishing blocks encompassing Footprint, Gull island, and Santa Barbara MPAs within CINMS", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
 ```
 
 ###----------
@@ -253,7 +290,7 @@ pelagicsCINMS_total$year<-as.factor(pelagicsCINMS_total$year)
 
 #### Create dataframe summed by species, year, and block
 ```{r}
-pelagicsCINMS_species_block_year<-aggregate(CPFV_pelagics_allblocks$n_kept, by=list(year=CPFV_pelagics_allblocks$year, block_id=CPFV_pelagics_allblocks$block_id, species=CPFV_pelagics_allblocks$species_name), FUN=sum)
+pelagicsCINMS_species_block_year<-aggregate(CPFV_pelagics_allblocks$n_kept, by=list(year=CPFV_pelagics_allblocks$year, block_id=CPFV_pelagics_allblocks$block_id, species=CPFV_pelagics_allblocks$species_name, species_type=CPFV_pelagics_allblocks$species_type), FUN=sum)
 pelagicsCINMS_species_block_year<-rename(pelagicsCINMS_species_block_year, "total"= "x")
 pelagicsCINMS_species_block_year$year<-as.character(pelagicsCINMS_species_block_year$year)
 
@@ -261,20 +298,80 @@ pelagicsCINMS_species_block_year$year<-as.character(pelagicsCINMS_species_block_
 
 ####**Graphing total trend by species and year
 ```{r}
-ggplot(pelagicsCINMS_species_block_year, aes(year, total, fill=species))+ 
+pelagicsCINMS_species_block_year$year<-as.numeric(pelagicsCINMS_species_block_year$year)
+ggplot(pelagicsCINMS_species_block_year, aes(year, total, fill=species_type))+ 
   #geom_point()+
   geom_col()+
-  #facet_wrap(~species)+
+  #facet_wrap(~species_group)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
   xlab("Year")+
   ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(legend.text=element_text(size=7))+
-  geom_vline(xintercept=which(pelagicsCINMS_total$year == '2004'), colour="black", size=1)+
-  geom_vline(xintercept=which(pelagicsCINMS_total$year == '2007'), colour="black", size=1)
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime across CINMS fishing blocks", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
 ```
+####Blocks in 10 year bins
+```{r}
+pelagicsCINMS_species_block_year$year<-as.numeric(pelagicsCINMS_species_block_year$year)
+pelagicsCINMS_species_block_year$bin_years[pelagicsCINMS_species_block_year$year>=1980 & pelagicsCINMS_species_block_year$year< 1990] <- 1980
+pelagicsCINMS_species_block_year$bin_years[pelagicsCINMS_species_block_year$year>=1990 & pelagicsCINMS_species_block_year$year< 2000] <- 1990
+pelagicsCINMS_species_block_year$bin_years[pelagicsCINMS_species_block_year$year>=2000 & pelagicsCINMS_species_block_year$year< 2010] <- 2000
+pelagicsCINMS_species_block_year$bin_years[pelagicsCINMS_species_block_year$year>=2010 & pelagicsCINMS_species_block_year$year< 2020] <- 2010
+pelagicsCINMS_species_block_year$year<-as.character(pelagicsCINMS_species_block_year$year)
+```
+####Aggregating bins
+```{r}
+pelagicsCINMS_binnedyrs<-aggregate(pelagicsCINMS_species_block_year$total, by=list(year=pelagicsCINMS_species_block_year$bin_years, block_id= pelagicsCINMS_species_block_year$block_id), FUN=sum)
+pelagicsCINMS_binnedyrs<-rename(pelagicsCINMS_binnedyrs, "total"= "x")
+pelagicsCINMS_binnedyrs<- replace(pelagicsCINMS_binnedyrs, is.na(pelagicsCINMS_binnedyrs), 0)
+
+```
+
+### Heat map of blocks across years 
+```{r}
+#joining the shapefile of southern Californian fishing blocks and the total catch by year and block--- NEED TO CHECK TO SEE IF WE HAVE TO REMOVE BLOCKS WITH LESS THAT 3 DATA POINTS
+
+
+CINMS_fishing_blocks_binned_pelagic <-left_join(SoCal_fishing_blocks, pelagicsCINMS_binnedyrs, by= "block_id", relationship= "many-to-many", na_matches= "never")
+CINMS_fishing_blocks_binned_pelagic<- CINMS_fishing_blocks_binned_pelagic %>% drop_na(total)
+
+CINMS_fishing_blocks_binned_pelagic<- subset(CINMS_fishing_blocks_binned_pelagic, !is.na(CINMS_fishing_blocks_binned_pelagic$total))
+
+ggplot() + 
+  geom_sf(data = CINMS_fishing_blocks_binned_pelagic, mapping = aes(fill = total))+
+  facet_wrap(~year)+
+  scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100")+
+  theme(axis.line=element_blank(),
+      axis.text.x=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks=element_blank(),
+      axis.title.x=element_blank(),
+      axis.title.y=element_blank(),
+      panel.background=element_blank(),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.background=element_blank())
+
+ 
+#  geom_sf(data = SoCal_fishing_blocks, mapping = aes(fill = NAME), show.legend = FALSE)
+```
+
 #----------
 #SoCal Blocks Only
 ###Year, species, block
@@ -288,7 +385,7 @@ pelagicssocal_total$year<-as.factor(pelagicssocal_total$year)
 
 #### Create dataframe summed by species, year, and block
 ```{r}
-pelagicssocal_species_block_year<-aggregate(CPFV_pelagics_socal$n_kept, by=list(year=CPFV_pelagics_socal$year, block_id=CPFV_pelagics_socal$block_id, species=CPFV_pelagics_socal$species_name), FUN=sum)
+pelagicssocal_species_block_year<-aggregate(CPFV_pelagics_socal$n_kept, by=list(year=CPFV_pelagics_socal$year, block_id=CPFV_pelagics_socal$block_id, species=CPFV_pelagics_socal$species_name, species_type=CPFV_pelagics_socal$species_type), FUN=sum)
 pelagicssocal_species_block_year<-rename(pelagicssocal_species_block_year, "total"= "x")
 pelagicssocal_species_block_year$year<-as.character(pelagicssocal_species_block_year$year)
 
@@ -296,20 +393,61 @@ pelagicssocal_species_block_year$year<-as.character(pelagicssocal_species_block_
 
 ####**Graphing total trend by species and year
 ```{r}
-ggplot(pelagicssocal_species_block_year, aes(year, total, fill=species))+ 
+pelagicssocal_species_block_year$year<-as.numeric(pelagicssocal_species_block_year$year)
+ggplot(pelagicssocal_species_block_year, aes(year, total, fill=species_type))+ 
   #geom_point()+
   geom_col()+
-  #facet_wrap(~species)+
+  #facet_wrap(~species_group)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
   xlab("Year")+
   ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(legend.text=element_text(size=7))+
-  geom_vline(xintercept=which(pelagicsCINMS_total$year == '2004'), colour="black", size=1)+
-  geom_vline(xintercept=which(pelagicsCINMS_total$year == '2007'), colour="black", size=1)+
+  #adding lines for mpa designation years 
+  geom_vline(aes(xintercept = 2004), pelagicsmpa_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsmpa_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsmpa_species_block_year, colour="black", size=0.75, linetype=3)+
+   labs(title = str_wrap("CPFV catch overtime across Southern California fishing blocks
+", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
   
+```
+
+####Blocks in 10 year bins
+```{r}
+pelagicssocal_species_block_year$year<-as.numeric(pelagicssocal_species_block_year$year)
+pelagicssocal_species_block_year$bin_years[pelagicssocal_species_block_year$year>=1980 & pelagicssocal_species_block_year$year< 1990] <- 1980
+pelagicssocal_species_block_year$bin_years[pelagicssocal_species_block_year$year>=1990 & pelagicssocal_species_block_year$year< 2000] <- 1990
+pelagicssocal_species_block_year$bin_years[pelagicssocal_species_block_year$year>=2000 & pelagicssocal_species_block_year$year< 2010] <- 2000
+pelagicssocal_species_block_year$bin_years[pelagicssocal_species_block_year$year>=2010 & pelagicssocal_species_block_year$year< 2020] <- 2010
+pelagicssocal_species_block_year$year<-as.character(pelagicssocal_species_block_year$year)
+```
+####Aggregating bins
+```{r}
+pelagicssocal_binnedyrs<-aggregate(pelagicssocal_species_block_year$total, by=list(year=pelagicssocal_species_block_year$bin_years, block_id= pelagicssocal_species_block_year$block_id), FUN=sum)
+pelagicssocal_binnedyrs<-rename(pelagicssocal_binnedyrs, "total"= "x")
+
+```
+
+### Heat map of blocks across years 
+```{r}
+#joining the shapefile of southern Californian fishing blocks and the total catch by year and block--- NEED TO CHECK TO SEE IF WE HAVE TO REMOVE BLOCKS WITH LESS THAT 3 DATA POINTS
+SoCal_fishing_blocks_binned_pelagic <-left_join(SoCal_fishing_blocks, pelagicssocal_binnedyrs, by= "block_id", relationship= "many-to-many")
+
+ggplot() + 
+  geom_sf(data = SoCal_fishing_blocks_binned_pelagic, mapping = aes(fill = total))+
+  facet_wrap(~year)
+
+ 
+#  geom_sf(data = SoCal_fishing_blocks, mapping = aes(fill = NAME), show.legend = FALSE)
 ```
 
 #QAQC 2015 spike
