@@ -24,6 +24,7 @@ library(ggplot2)
 library(lubridate)
 library(sf)
 library(tidyr)
+library(viridis)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
 ```
 
@@ -40,8 +41,6 @@ SoCal_fishing_blocks<-rename(SoCal_fishing_blocks, "block_id"= "BLOCK10_ID")
 SoCal_fishing_blocks = subset(SoCal_fishing_blocks, select = -c(total) )
 
 CINMS<-st_read("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/ArcGIS_Projects/CPFV_pelagics/Data/CINMS/CINMS.shp")
-
-gasprices<- read_csv("C:/Users/vanessa.van.deusen/Desktop/Vanessa_non_network/R_projects/CPFV_pelagics/Data/gas_prices_EIA.csv")
 
 ```
 
@@ -484,7 +483,9 @@ ggplot() +
       panel.border=element_blank(),
       panel.grid.major=element_blank(),
       panel.grid.minor=element_blank(),
-      plot.background=element_blank())
+      plot.background=element_blank())+
+  ggtitle("CPFV catch by block in CINMS boundaries")+
+   theme(plot.title = element_text(hjust = 0.5))
 
  
 #  geom_sf(data = SoCal_fishing_blocks, mapping = aes(fill = NAME), show.legend = FALSE)
@@ -562,7 +563,23 @@ SoCal_fishing_blocks_binned_pelagic <-left_join(SoCal_fishing_blocks, pelagicsso
 
 ggplot() + 
   geom_sf(data = SoCal_fishing_blocks_binned_pelagic, mapping = aes(fill = total))+
-  facet_wrap(~year)
+  facet_wrap(~year)+
+  scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100")+
+  theme(axis.line=element_blank(),
+      axis.text.x=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks=element_blank(),
+      axis.title.x=element_blank(),
+      axis.title.y=element_blank(),
+      panel.background=element_blank(),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.background=element_blank())+
+  ggtitle("CPFV catch by block in Southern California")+
+   theme(plot.title = element_text(hjust = 0.5))
 
  
 #  geom_sf(data = SoCal_fishing_blocks, mapping = aes(fill = NAME), show.legend = FALSE)
