@@ -339,6 +339,37 @@ pelagicsCINMS_species_block_year$year<-as.character(pelagicsCINMS_species_block_
 ####**Graphing total trend by species and year
 ```{r}
 pelagicsCINMS_species_block_year$year<-as.numeric(pelagicsCINMS_species_block_year$year)
+ggplot(pelagicsCINMS_species_block_year, aes(year, total, fill=species_type))+ 
+  #geom_point()+
+  geom_col()+
+  #geom_line(data=gas_adjusted, aes(x=Year, y=adjust_price))+
+  #facet_wrap(~species_group)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  #theme(plot.margin = unit(c(5,5,5,5), 'points'))+
+  #xlab("Year")+
+  ylab("Total Caught")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(legend.text=element_text(size=7))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime across CINMS fishing blocks", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
+
+```
+####Gas + Species
+```{r}
+pelagicsCINMS_species_block_year$year<-as.numeric(pelagicsCINMS_species_block_year$year)
 plot1<-ggplot(pelagicsCINMS_species_block_year, aes(year, total, fill=species_type))+ 
   #geom_point()+
   geom_col()+
@@ -380,18 +411,35 @@ plot2
 
 ggarrange(plot1, plot2, nrow=2)
 ```
-###Troubleshooting double graph
+
+
+####Line Plot 
 ```{r}
-
-ggplot()+
-  geom_col(data=pelagicsCINMS_species_block_year, aes(year, total, fill=species_type))+
-  geom_line(data=gas_adjusted, aes(x=Year, y=adjust_price*6000))+
-  scale_y_continuous("total", sec.axis = sec_axis( ~.*0.00006))
-
-ggplot(gas_adjusted, aes(Year, adjust_price))+
-  geom_line()
-ggplot(gas_adjusted, aes(Year, adjust_price))+
-  geom_line()
+ggplot(pelagicsCINMS_species_block_year, aes(year, total))+ 
+  #geom_point()+
+  geom_line(size=1, color= "darkblue")+
+  facet_wrap(~species_type)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  #theme(plot.margin = unit(c(5,5,5,5), 'points'))+
+  #xlab("Year")+
+  ylab("Total Caught")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,10))+
+  theme(legend.text=element_text(size=7))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime across CINMS fishing blocks", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
 ```
 
 ###Species specific
@@ -607,6 +655,50 @@ ggplot(pelagicssocal_species_block_year, aes(year, total, fill=species_type))+
 ", 70))+
    theme(plot.title = element_text(hjust = 0.5))
   
+```
+
+####Gas + Species
+```{r}
+plot1<-ggplot(pelagicssocal_species_block_year, aes(year, total, fill=species_type))+ 
+  #geom_point()+
+  geom_col()+
+  #geom_line(data=gas_adjusted, aes(x=Year, y=adjust_price))+
+  #facet_wrap(~species_group)+
+  theme_bw()+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank())+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  theme(plot.margin = unit(c(5,5,0,5), 'points'))+
+  #xlab("Year")+
+  ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(legend.text=element_text(size=7))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicssocal_species_block_year, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicssocal_species_block_year, colour="black", size=1)+
+  #adding lines for years where ENSO index was >1.5 
+  geom_vline(aes(xintercept = 1991), pelagicssocal_species_block_year, colour="black", size=0.75, linetype=3)+ 
+  geom_vline(aes(xintercept = 1986), pelagicssocal_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicssocal_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 2015), pelagicssocal_species_block_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicssocal_species_block_year, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime across Southern California fishing blocks and inflation adjusted gas prices", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
+plot1
+
+plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
+  geom_line(size=1)+
+  theme_bw()+
+  theme(plot.margin = unit(c(5,5,5,5), 'points'))+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  labs(y = paste0("Adjusted Gas", "\n", "Price ($)"))+
+  #ylab("Adjusted Gas Price ($)")+
+  xlab("Year")
+plot2
+
+ggarrange(plot1, plot2, nrow=2)
 ```
 
 ####Blocks in 10 year bins
