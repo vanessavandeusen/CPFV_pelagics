@@ -27,6 +27,7 @@ library(tidyr)
 library(viridis)
 library(quantmod) 
 library(egg)
+library(ggspatial)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
 ```
 
@@ -236,6 +237,19 @@ pdo$avg<-rowMeans(pdo[, 2:13])
 postive_pdo<-subset(pdo, avg >= 1 & Year >= 1980)
 ```
 
+# Extracting years MHW data
+Only including marine heat waves that were 2 STDEVs from normal
+-- MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
+```{r}
+#Format time and add year 
+MHW$time<- lubridate::ymd(MHW$time)
+MHW$Year<-MHW$time
+MHW$Year <-format(as.Date(MHW$Year , format= "%Y/%m/%d"), "%Y")
+
+#Subset by intensity 
+MHW_over2<-subset(MHW, MHW$mean_intensity >= 2)
+
+```
 
 #----------
 #Inital graph across time
@@ -315,6 +329,7 @@ pelagicsmpa_species_block_year_type<-rename(pelagicsmpa_species_block_year_type,
 ####**Graphing total trend by species and year
 #####Bar graph
 Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
+MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
 ```{r}
 pelagicsmpa_species_block_year$year<-as.numeric(pelagicsmpa_species_block_year$year)
 ggplot(pelagicsmpa_species_block_year, aes(year, total, fill=species_type))+ 
@@ -335,8 +350,12 @@ ggplot(pelagicsmpa_species_block_year, aes(year, total, fill=species_type))+
   #adding lines for years where ENSO index was >1.5-- type 2, dashed 
   #adding lines for years where PDO index was >1-- type 3, dotted 
   #where PDO and ENSO in same year-- type 4, dot dashed
-  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=2)+
+  # where MHW-- type 5, longdash 
+  #where MHW and ENSO-- type 6, two dash
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=6)+
+  geom_vline(aes(xintercept = 2006), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=5)+
   geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=4)+
+  geom_vline(aes(xintercept = 1995), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=5)+
   geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=3)+
   geom_vline(aes(xintercept = 1991), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=2)+
   geom_vline(aes(xintercept = 1987), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=3)+
@@ -431,12 +450,21 @@ ggplot(pelagicsCINMS_species_block_year, aes(year, total, fill=species_type))+
   #adding lines for mpa designation years
   geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_block_year, colour="black", size=1)+
   geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_block_year, colour="black", size=1)+
-  #adding lines for years where ENSO index was >1.5 
-  geom_vline(aes(xintercept = 1991), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+ 
-  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1982), pelagicsCINMS_species_block_year, colour="black", size=0.75, linetype=3)+
+  #adding lines for years where ENSO index was >1.5-- type 2, dashed 
+  #adding lines for years where PDO index was >1-- type 3, dotted 
+  #where PDO and ENSO in same year-- type 4, dot dashed
+  # where MHW-- type 5, longdash 
+  #where MHW and ENSO-- type 6, two dash
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=6)+
+  geom_vline(aes(xintercept = 2006), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=5)+
+  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=4)+
+  geom_vline(aes(xintercept = 1995), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=5)+
+  geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1991), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1987), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=4)+
+  geom_vline(aes(xintercept = 1983), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1982), pelagicsmpa_species_block_year, colour="grey46", size=0.75, linetype=2)+
   labs(title = str_wrap("CPFV catch overtime across CINMS fishing blocks", 70))+
    theme(plot.title = element_text(hjust = 0.5))
 
