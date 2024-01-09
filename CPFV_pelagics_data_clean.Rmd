@@ -6,10 +6,13 @@ output: html_document
 ---
 project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
 PI: Jenny Selgrath
-data input: cpfv_merged_no_pii.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
-** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
-data output: CDFW_1980_2020_cpfv_logbook_data.Rds
-
+________________________________________________
+Data input: cpfv_merged_no_pii.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
+----------
+see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
+_________________________________________________
+data output: CDFW_1980_2020_cpfv_logbook_data.Rds, CPFV_pelagic_species_subset.Rds
+-------------
 #Inital setup
 ## Loading libraries
 ```{r setup, include=FALSE}
@@ -206,7 +209,9 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
                          bait_used_other_dead, bait_used_anchovies_dead, 
                          bait_used_sardines_dead, bait_used_other_live, sep=", ")) %>% 
   mutate(bait_used=gsub("NA, |, NA", "", bait_used)) %>% 
-  select(-c(bait_used_anchovies_live:bait_used_other_dead))%>%
+  select(-c(bait_used_anchovies_live:bait_used_other_dead))
+
+data_clean<- data_clean%>%
   mutate(ID=seq.int(nrow(data_clean)))%>%
   mutate(logbook_id_use=paste(ID, date, sep="-"))%>%
   select(logbook_id_use, 
@@ -236,7 +241,7 @@ log_key <- data_clean %>%
            block_id,
            depth_ft, temp_f,
            hm_fished, hrs_fished,
-           n_fishers, n_crew_fished, logbook_id_use) %>% 
+           n_fishers, n_crew_fished) %>% 
   summarize(n_kept=sum(n_kept)) %>% 
   ungroup()
 # Are the logbook ids unique? Mine should be, there's shouldn't be
@@ -393,3 +398,68 @@ data_out <- data %>%
 saveRDS(data_clean, file.path(path_out, "CDFW_1980_2020_cpfv_logbook_data.Rds"))
 ```
 
+#------
+#Subset for Pelagics 
+Pelagic species: From Kacy CCA response notes-- "Condition report definition for coastal pelagic and HMF: California barracuda, Pacific bonito, white sea bass, yellowtail, albacore, blue shark, jack mackerel, northern, anchovy, opah, Pacific mackerel, Pacific northern bluefin tuna, Pacific sardine, shortfin mako shark, skipjack tuna, striped marlin, swordfish, thresher shark, white shark, and yellowfin tuna. "
+
+   swordfish,  white shark, and  
+
+Barracuda, California; Bonito, Pacific; Anchovy, northern; **dolphin (fish)**; Mackerel, jack; Mackerel, Pacific;  Marlin, striped; Mackerel, unspecified; Opah; Seabass, white; Shark, blue;Shark, shortfin mako; Shark, thresher; Tuna, albacore; Tuna, bluefin; Tuna, skipjack; Tuna, skipjack, black; Tuna, unspecified ; Tuna, yellowfin; Yellowtail; Sardine, Pacific; Swordfish; Shark, pelagic thresher; Shark, white; Swordfish
+
+swordfish is not within subset of data 
+###Selecting pelagics species 
+```{r}
+unique(CPFV_data$species_name)
+CPFV_pelagic_subset<-CPFV_data%>% subset(comm_name_orig=="Barracuda, California"|
+                                              comm_name_orig=="Bonito, Pacific"|
+                                              comm_name_orig=="Anchovy, northern"|
+                                              comm_name_orig=="dolphin (fish)"|
+                                              comm_name_orig=="Mackerel, jack"|
+                                              comm_name_orig=="Mackerel, Pacific"|
+                                              comm_name_orig=="Marlin, striped"|
+                                              comm_name_orig=="Mackerel, unspecified"|
+                                              comm_name_orig=="Opah"|
+                                              #comm_name_orig=="Seabass, white"|
+                                              comm_name_orig=="Shark, blue"|
+                                              comm_name_orig=="Shark, shortfin mako"|
+                                              comm_name_orig=="Shark, thresher"|
+                                              comm_name_orig=="Tuna, albacore"|
+                                              comm_name_orig=="Tuna, bluefin"|
+                                              comm_name_orig=="Tuna, skipjack"|
+                                              comm_name_orig=="Tuna, skipjack, black"|
+                                              comm_name_orig=="Tuna, unspecified"|
+                                              comm_name_orig=="Tuna, yellowfin"| 
+                                              comm_name_orig=="Yellowtail"|
+                                              comm_name_orig=="Sardine, Pacific"|
+                                              comm_name_orig=="Shark, pelagic thresher"|
+                                              comm_name_orig=="Shark, white"|
+                                              comm_name_orig=="Swordfish")
+```
+### Grouping by species type
+```{r}
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Shark, blue" |
+                             CPFV_pelagic_subset$species_name=="Shark, shortfin mako"|
+                             CPFV_pelagic_subset$species_name=="Shark, thresher"| 
+                             CPFV_pelagic_subset$species_name=="Shark, white"|
+                             CPFV_pelagic_subset$species_name=="Shark, pelagic thresher"] <- "Shark"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Tuna, albacore"|
+                             CPFV_pelagic_subset$species_name=="Tuna, bluefin"|
+                             CPFV_pelagic_subset$species_name=="Tuna, skipjack"| 
+                             CPFV_pelagic_subset$species_name=="Tuna, skipjack, black"|
+                             CPFV_pelagic_subset$species_name=="Tuna, unspecified"|
+                             CPFV_pelagic_subset$species_name=="Tuna, yellowfin"] <-"Tuna"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Mackerel, jack"|
+                             CPFV_pelagic_subset$species_name=="Mackerel, Pacific"|
+                             CPFV_pelagic_subset$species_name=="Mackerel, unspecified" ] <- "Mackerel"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Marlin, striped"|
+                             CPFV_pelagic_subset$species_name=="Swordfish"] <- "Billfish"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Anchovy, northern"|
+                             CPFV_pelagic_subset$species_name=="Sardine, Pacific"] <- "Baitfish"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Barracuda, California"] <- "Barracuda"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Bonito, Pacific"] <- "Bonito"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Opah"] <- "Opah"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Yellowtail"] <- "Yellowtail"
+
+##Save dataframe
+saveRDS(CPFV_pelagic_subset, file.path(path_out, "CPFV_pelagic_species_subset.Rds"))
+```
