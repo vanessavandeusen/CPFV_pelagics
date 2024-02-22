@@ -1,0 +1,431 @@
+---
+title: "CPFV_pelagics_CINMS_visualization"
+output: github_document
+editor_options: 
+  chunk_output_type: inline
+---
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
+PI: Jenny Selgrath
+Purpose of code: to create graphs (bar and line graphs and heat maps) depicting pelagic CPFV catch in the CDFW fishing blocks within CINMS boundaries.
+______________
+data input: CPFV_pelagic_species_subset.Rds
+** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
+_______________
+Graph output:  
+_______________
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(tidyr)
+library(viridis)
+library(quantmod) 
+library(egg)
+library(ggspatial)
+library(OneR)
+library(gganimate)
+library(transformr)
+library(maps)
+library(rnaturalearthdata)
+library(rnaturalearth)
+path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
+path_plot="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS"
+```
+
+# Importing data
+```{r cars}
+CPFV_pelagics<-readRDS("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CPFV_pelagic_species_subset.Rds")
+#MPA_shapefile<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_fishingblocks/MPA_footprint_gullisland_sb_commercial_blocks.shp")
+CINMS<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CINMS_shapefile/CINMS.shp")
+CINMS_surrounding_fishing_blocks<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_fishingblocks/CINMS_surrounding_fishing_blocks.shp")
+CINMS_fishing_blocks<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CINMS_fishingblock_intersect.csv")
+gas_adjusted2020<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/gas_adjusted2020.csv")
+CINMS_state_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_CINMS/MPA_State_CINMS_shapefile/CINMS_State_MPAs.shp")
+CINMS_fed_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_CINMS/MPA_Fed_CINMS_shapefile/CINMS_Fed_MPAs.shp")
+
+```
+
+#______________
+#Pre-processing
+##Subsetting by CINMS blocks
+```{r}
+unique(CINMS_fishing_blocks[,c("BLOCK10_ID")])
+CPFV_pelagics_allblocks<- CPFV_pelagics%>% subset(block_id==744|
+                                       block_id==745|
+                                       block_id==764|
+                                       block_id==765|
+                                       block_id==766|
+                                       block_id==667|
+                                       block_id==668|
+                                       block_id==670|
+                                       block_id==671|
+                                       block_id==672|
+                                       block_id==683|
+                                       block_id==684|
+                                       block_id==685|
+                                       block_id==686|
+                                       block_id==687|
+                                       block_id==688|
+                                       block_id==689|
+                                       block_id==690|
+                                       block_id==691|
+                                       block_id==706|
+                                       block_id==707|
+                                       block_id==708|
+                                       block_id==709|
+                                       block_id==710|
+                                       block_id==711|
+                                       block_id==712|
+                                       block_id==713|
+                                       block_id==714|
+                                       block_id==729|
+                                       block_id==730|
+                                       block_id==731)
+
+```
+```{r}
+CINMS_shpfile_blocks<- CINMS_surrounding_fishing_blocks%>% subset(BLOCK10_ID==744|
+                                       BLOCK10_ID==745|
+                                       BLOCK10_ID==764|
+                                       BLOCK10_ID==765|
+                                       BLOCK10_ID==766|
+                                       BLOCK10_ID==667|
+                                       BLOCK10_ID==668|
+                                       BLOCK10_ID==670|
+                                       BLOCK10_ID==671|
+                                       BLOCK10_ID==672|
+                                       BLOCK10_ID==683|
+                                       BLOCK10_ID==684|
+                                       BLOCK10_ID==685|
+                                       BLOCK10_ID==686|
+                                       BLOCK10_ID==687|
+                                       BLOCK10_ID==688|
+                                       BLOCK10_ID==689|
+                                       BLOCK10_ID==690|
+                                       BLOCK10_ID==691|
+                                       BLOCK10_ID==706|
+                                       BLOCK10_ID==707|
+                                       BLOCK10_ID==708|
+                                       BLOCK10_ID==709|
+                                       BLOCK10_ID==710|
+                                       BLOCK10_ID==711|
+                                       BLOCK10_ID==712|
+                                       BLOCK10_ID==713|
+                                       BLOCK10_ID==714|
+                                       BLOCK10_ID==729|
+                                       BLOCK10_ID==730|
+                                       BLOCK10_ID==731)
+```
+
+
+##Removing billfish, baitfish, opah, and sharks
+```{r}
+##removing species
+CPFV_pelagics_allblocks_rm<-subset(CPFV_pelagics_allblocks, CPFV_pelagics_allblocks$species_type != "Opah"& CPFV_pelagics_allblocks$species_type != "Shark"& CPFV_pelagics_allblocks$species_type != "Baitfish"& CPFV_pelagics_allblocks$species_type != "Billfish")
+```
+
+##Aggregating by year 
+```{r}
+pelagicsCINMS_year_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+pelagicsCINMS_year_rm<-rename(pelagicsCINMS_year_rm, "total"= "x")
+```
+
+##Aggregating by year and block
+```{r}
+##aggregating by block and year
+pelagicsCINMS_year_block_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+pelagicsCINMS_year_block_rm<-rename(pelagicsCINMS_year_block_rm, "total"= "x")
+pelagicsCINMS_year_block_rm<- replace(pelagicsCINMS_year_block_rm, is.na(pelagicsCINMS_year_block_rm), 0)
+```
+
+##Aggregating by species, year, block
+```{r}
+pelagicsCINMS_species_year_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+pelagicsCINMS_species_year_rm<-rename(pelagicsCINMS_species_year_rm, "total"= "x")
+pelagicsCINMS_species_year_rm$year<-as.character(pelagicsCINMS_species_year_rm$year)
+
+```
+
+##Aggregating by species type, year
+```{r}
+pelagicsCINMS_species_year_type_rm<-aggregate(pelagicsCINMS_species_year_rm$total, by=list(species_type=pelagicsCINMS_species_year_rm$species_type, year=pelagicsCINMS_species_year_rm$year), FUN=sum)
+pelagicsCINMS_species_year_type_rm<-rename(pelagicsCINMS_species_year_type_rm, "total"= "x")
+```
+
+#_______________
+#Graphing
+##Bar graph- species type, year
+Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
+MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
+```{r}
+pelagicsCINMS_species_year_rm$year<-as.numeric(pelagicsCINMS_species_year_rm$year)
+ggplot(pelagicsCINMS_species_year_rm, aes(year, total, fill=species_type))+ 
+  geom_col()+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  xlab("Year")+
+  ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(legend.text=element_text(size=7))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_year_rm, colour="black", size=1)+
+  #adding MHW events 
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  #adding lines where ENSO over 1.5 
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+   #adding shading where PDO is over 1 
+  geom_vline(aes(xintercept = 1983), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime in CINMS CDFW fishing blocks", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("CINMS_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+
+```
+
+##Line Plot- species type, year
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+ggplot(pelagicsCINMS_species_year_type_rm, aes(year, total), 
+       )+ 
+  geom_line(size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Total Caught")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,10))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_year_type_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_year_type_rm, colour="black", size=1)+
+  #adding MHW events 
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
+  #adding lines where ENSO over 1.5 
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  #adding shading where PDO is over 1 
+  geom_vline(aes(xintercept = 1983), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
+labs(title = str_wrap("CPFV catch in CINMS fishing blocks", 70))
+ggsave("CINMS_line_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
+##Line Plot- All catch, year, gas, map
+Couldn't get the dimesions to graph correctly on the 3 level stacked graph, so making the location graph seperately and then joining outside of R 
+###Stacked Line Graph and gas prices 
+```{r}
+pelagicsCINMS_year_rm$year<-as.numeric(as.character(pelagicsCINMS_year_rm$year))
+plot1<- ggplot(pelagicsCINMS_year_rm, aes(year, total))+ 
+  geom_line(size=1, color= "black")+
+  theme_bw()+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  theme(plot.title = element_text(hjust=0.5))+
+  ylab("Total Caught")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank())+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_year_rm, colour="black", size=1)+
+  #adding MHW events 
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=2)+
+  #adding lines where ENSO over 1.5 
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  #adding shading where PDO is over 1 
+  geom_vline(aes(xintercept = 1983), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_year_rm, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV in CINMS fishing blocks", 70))
+plot1
+
+plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
+  geom_line(size=1)+
+  theme_bw()+
+  theme(plot.margin = unit(c(5,5,5,5), 'points'))+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+   scale_x_continuous(breaks=seq(1980,2020,10))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  labs(y = paste0("Adjusted Gas", "\n", "Price ($)"))+
+  xlab("Year")
+plot2
+plotstacked<-ggarrange(plot1, plot2)
+plotstacked
+ggsave("CINMS_stacked_gas_all.jpeg", plot= plotstacked, width = 10, units="in", path = path_plot)
+```
+
+###Location Map
+```{r}
+plot3<-ggplot()+ 
+  geom_sf(data=CINMS_surrounding_fishing_blocks, fill="lightblue" )+
+  geom_sf(data=CINMS_shpfile_blocks, fill= "cornflowerblue", alpha=0.75)+
+    geom_sf(data=CINMS, color= "black", fill= NA)+
+  theme_bw()+
+  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
+  annotation_north_arrow(location= "tr", which_north= "true")+
+  xlab("Longitude")+
+  ylab("Latitude")
+plot3
+ggsave("CINMS_location_map.jpeg", plot= plot3, width = 10, units="in", path = path_plot)
+```
+
+#_______________
+#Heat Map 
+
+##Joining shapefile + data
+```{r}
+##putting in Zeros where there isn't data about fishing blocks
+complete_pelagicsCINMS_year_block_rm<-tidyr::complete(pelagicsCINMS_year_block_rm, block_id, year, fill=list(total=0))
+
+##joining shapefile and data
+CINMS_shpfile_blocks<-rename(CINMS_shpfile_blocks, "block_id"= "BLOCK10_ID")
+CINMS_fishing_blocks_pelagic<-left_join(CINMS_shpfile_blocks, complete_pelagicsCINMS_year_block_rm, by= "block_id", relationship= "many-to-many", na_matches= "never")
+
+##removing NAs
+CINMS_fishing_blocks_pelagic<- subset(CINMS_fishing_blocks_pelagic, !is.na(CINMS_fishing_blocks_pelagic$total))
+```
+
+###Path
+```{r}
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year"
+
+```
+
+
+##"For loop" graphing
+iterative loop for printing each block 
+###For before MPA designation state= 2004
+```{r}
+##Subsetting so can add MPAs as designated
+CINMS_fishing_blocks_pelagic_2004<- subset(CINMS_fishing_blocks_pelagic, year<2004)
+
+##Graphing and saving
+for(i in unique(CINMS_fishing_blocks_pelagic_2004$year)){
+  x<-ggplot()+
+              geom_sf(data=CINMS_shpfile_blocks, fill="white")+
+              geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=total))+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+  theme_classic()+
+  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
+  annotation_north_arrow(location= "tr", which_north= "true")+
+  xlab("Longitude")+
+  ylab("Latitude")+
+  ggtitle(label =  "CINMS CPFV Catch", 
+    subtitle= paste("Year", i, sep = "-"))+
+    theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_", i, ".png") )
+}
+```
+
+
+
+###For after state designation MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+CINMS_fishing_blocks_pelagic_2004_2007<- subset(CINMS_fishing_blocks_pelagic, year>2004 & year<2007)
+
+##Graphing and printing
+for(i in unique(CINMS_fishing_blocks_pelagic_2004_2007$year)){
+  x<- ggplot()+
+              geom_sf(data=CINMS_shpfile_blocks, fill="white")+
+              geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2004_2007, year==i & year>2003 & year<2007), aes(fill=total))+
+              geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+  theme_classic()+
+  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
+  annotation_north_arrow(location= "tr", which_north= "true")+
+  xlab("Longitude")+
+  ylab("Latitude")+
+  ggtitle(label =  "CINMS CPFV Catch", 
+    subtitle= paste("Year", i, sep = "-"))+
+    theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_", i, ".png") )
+}
+```
+
+### For after fed designation of MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+CINMS_fishing_blocks_pelagic_2007<- subset(CINMS_fishing_blocks_pelagic, year>2006)
+
+##Graphing and printing
+for(i in unique(CINMS_fishing_blocks_pelagic_2007$year)){
+  x<- ggplot()+
+              geom_sf(data=CINMS_shpfile_blocks, fill="white")+
+              geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=total))+
+              geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+              geom_sf(data=CINMS_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+  theme_classic()+
+  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
+  annotation_north_arrow(location= "tr", which_north= "true")+
+  xlab("Longitude")+
+  ylab("Latitude")+
+  ggtitle(label =  "CINMS CPFV Catch", 
+    subtitle= paste("Year", i, sep = "-"))+
+    theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_", i, ".png") )
+}
+```

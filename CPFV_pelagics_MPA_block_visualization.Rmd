@@ -9,8 +9,9 @@ ______________
 data input: CPFV_pelagic_species_subset.Rds, MPA_footprint_gullisland_sb_commercial_blocks.shp, CINMS.shp
 ** see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
 _______________
-Graph output:  MPA_bar_pelagic.jpeg, MPA_line_pelagic.jpeg, MPA_stacked_gas_all.jpeg
+Graph output:  MPA_bar_pelagic.jpeg, MPA_line_pelagic.jpeg, MPA_stacked_gas_all.jpeg, MPA_location_map.jpeg, 
 _______________
+
 #Inital setup
 ## Loading libraries
 ```{r setup, include=FALSE}
@@ -33,8 +34,10 @@ library(OneR)
 library(gganimate)
 library(transformr)
 library(maps)
+library(rnaturalearthdata)
+library(rnaturalearth)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
-path_plot="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs"
+path_plot="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA"
 ```
 
 ## Importing data
@@ -43,6 +46,11 @@ CPFV_pelagics<-readRDS("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPF
 MPA_shapefile<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_fishingblocks/MPA_footprint_gullisland_sb_commercial_blocks.shp")
 CINMS<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CINMS_shapefile/CINMS.shp")
 CINMS_surrounding_fishing_blocks<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_fishingblocks/CINMS_surrounding_fishing_blocks.shp")
+gas_adjusted2020<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/gas_adjusted2020.csv")
+footprint_gull_sb_state_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/Footprint_gull_SB_state_mpa/Footprint_gull_sb_state_MPA_boundaries.shp")
+footprint_gull_sb_fed_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/Footprint_gull_SB_fed_mpa/Footprint_gull_SB_fed_MPA_boundaries.shp")
+footprint_gull_sb_surrounding_blocks<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/footprint_gull_SB_surrounding_fishing_blocks/MPA_surrounding_fishing_blocks.shp")
+
 ```
 
 #______________
@@ -65,42 +73,39 @@ CPFV_pelagics_gullisland<- CPFV_pelagics%>% subset(block_id==710|block_id==709)
 CPFV_pelagics_santabarbara<- CPFV_pelagics%>% subset(block_id==764|block_id==765)
 ```
 
-##Aggregating by just year 
+##Removing billfish, baitfish, opah, and sharks
 ```{r}
-pelagicsmpa_year<-aggregate(CPFV_pelagics_mpa$n_kept, by=list(year=CPFV_pelagics_mpa$year), FUN=sum)
-pelagicsmpa_year<-rename(pelagicsmpa_year, "total"= "x")
-pelagicsmpa_year$year<-as.character(pelagicsmpa_year$year)
+##removing species
+CPFV_pelagics_mpa_rm<-subset(CPFV_pelagics_mpa, CPFV_pelagics_mpa$species_type != "Opah"& CPFV_pelagics_mpa$species_type != "Shark"& CPFV_pelagics_mpa$species_type != "Baitfish"& CPFV_pelagics_mpa$species_type != "Billfish")
 ```
 
-##Aggregating by just year and block 
+##Aggregating by year 
 ```{r}
-pelagicsmpa_year_block<-aggregate(CPFV_pelagics_mpa$n_kept, by=list(year=CPFV_pelagics_mpa$year, block_id=CPFV_pelagics_mpa$block_id), FUN=sum)
-pelagicsmpa_year_block<-rename(pelagicsmpa_year_block, "total"= "x")
-pelagicsmpa_year_block<- replace(pelagicsmpa_year_block, is.na(pelagicsmpa_year_block), 0)
+pelagicsmpa_year_rm<-aggregate(CPFV_pelagics_mpa_rm$n_kept, by=list(year=CPFV_pelagics_mpa_rm$year), FUN=sum)
+pelagicsmpa_year_rm<-rename(pelagicsmpa_year_rm, "total"= "x")
+```
 
+##Aggregating by year and block
+```{r}
+##aggregating by block and year
+pelagicsmpa_year_block_rm<-aggregate(CPFV_pelagics_mpa_rm$n_kept, by=list(year=CPFV_pelagics_mpa_rm$year, block_id=CPFV_pelagics_mpa_rm$block_id), FUN=sum)
+pelagicsmpa_year_block_rm<-rename(pelagicsmpa_year_block_rm, "total"= "x")
+pelagicsmpa_year_block_rm<- replace(pelagicsmpa_year_block_rm, is.na(pelagicsmpa_year_block_rm), 0)
 ```
 
 
 ##Aggregating by species, year, block
 ```{r}
-pelagicsmpa_species_year<-aggregate(CPFV_pelagics_mpa$n_kept, by=list(year=CPFV_pelagics_mpa$year, species=CPFV_pelagics_mpa$species_name, species_type=CPFV_pelagics_mpa$species_type, block_id= CPFV_pelagics_mpa$block_id), FUN=sum)
-pelagicsmpa_species_year<-rename(pelagicsmpa_species_year, "total"= "x")
-pelagicsmpa_species_year$year<-as.character(pelagicsmpa_species_year$year)
+pelagicsmpa_species_year_rm<-aggregate(CPFV_pelagics_mpa_rm$n_kept, by=list(year=CPFV_pelagics_mpa_rm$year, species=CPFV_pelagics_mpa_rm$species_name, species_type=CPFV_pelagics_mpa_rm$species_type, block_id= CPFV_pelagics_mpa_rm$block_id), FUN=sum)
+pelagicsmpa_species_year_rm<-rename(pelagicsmpa_species_year_rm, "total"= "x")
+pelagicsmpa_species_year_rm$year<-as.character(pelagicsmpa_species_year_rm$year)
 
 ```
 
 ##Aggregating by species type, year
 ```{r}
-pelagicsmpa_species_year_type<-aggregate(pelagicsmpa_species_year$total, by=list(species_type=pelagicsmpa_species_year$species_type, year=pelagicsmpa_species_year$year), FUN=sum)
-pelagicsmpa_species_year_type<-rename(pelagicsmpa_species_year_type, "total"= "x")
-```
-
-
-##Removing species that aren't relevant
-specifically removing baitfish, opah, sharks 
-```{r}
-pelagicsmpa_species_year_type_rm<-subset(pelagicsmpa_species_year_type, pelagicsmpa_species_year_type$species_type != "Opah"& pelagicsmpa_species_year_type$species_type != "Shark"& pelagicsmpa_species_year_type$species_type != "Baitfish"&
-pelagicsmpa_species_year_type$species_type != "Billfish")
+pelagicsmpa_species_year_type_rm<-aggregate(pelagicsmpa_species_year_rm$total, by=list(species_type=pelagicsmpa_species_year_rm$species_type, year=pelagicsmpa_species_year_rm$year), FUN=sum)
+pelagicsmpa_species_year_type_rm<-rename(pelagicsmpa_species_year_type_rm, "total"= "x")
 ```
 
 #_______________
@@ -109,8 +114,8 @@ pelagicsmpa_species_year_type$species_type != "Billfish")
 Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
 MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
 ```{r}
-pelagicsmpa_species_year$year<-as.numeric(pelagicsmpa_species_year$year)
-ggplot(pelagicsmpa_species_year, aes(year, total, fill=species_type))+ 
+pelagicsmpa_species_year_rm$year<-as.numeric(pelagicsmpa_species_year_rm$year)
+ggplot(pelagicsmpa_species_year_rm, aes(year, total, fill=species_type))+ 
   #geom_point()+
   geom_col()+
   #facet_wrap(~species_group)+
@@ -123,19 +128,11 @@ ggplot(pelagicsmpa_species_year, aes(year, total, fill=species_type))+
   scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(legend.text=element_text(size=7))+
   #adding lines for mpa designation years
-  #adding lines for mpa designation years
-  geom_vline(aes(xintercept = 2004), pelagicsmpa_species_year, colour="black", size=1)+
-  geom_vline(aes(xintercept = 2007), pelagicsmpa_species_year, colour="black", size=1)+
-  #adding lines for years where PDO index was >1-- type 2, dotted 
-  #geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1987), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1983), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #adding MHW events 
-  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_year, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 2006), pelagicsmpa_species_year, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 1995), pelagicsmpa_species_year, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2004), pelagicsmpa_species_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsmpa_species_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=2)+
   #adding lines where ENSO over 1.5 
   annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .2)+
@@ -148,10 +145,10 @@ ggplot(pelagicsmpa_species_year, aes(year, total, fill=species_type))+
   annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .2)+
    #adding shading where PDO is over 1 
-  geom_vline(aes(xintercept = 1983), pelagicsmpa_species_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1993), pelagicsmpa_species_year, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_year, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1983), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_year_rm, colour="black", size=0.75, linetype=3)+
   labs(title = str_wrap("CPFV catch overtime in CDFW fishing blocks encompassing Footprint, Gull island, and Santa Barbara MPAs within CINMS", 70))+
    theme(plot.title = element_text(hjust = 0.5))
 
@@ -163,17 +160,13 @@ ggsave("MPA_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_p
 ```{r}
 ##Facet wrapped 
 pelagicsmpa_species_year_type_rm$year<-as.numeric(pelagicsmpa_species_year_type_rm$year)
-ggplot(pelagicsmpa_species_year_type_rm, aes(year, total), 
-       )+ 
-  #geom_point()+
+ggplot(pelagicsmpa_species_year_type_rm, aes(year, total), )+ 
   geom_line(size=1, color= "black")+
   facet_wrap(~species_type)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  #theme(plot.margin = unit(c(5,5,5,5), 'points'))+
-  #xlab("Year")+
   ylab("Total Caught")+
   xlab("Years")+
   scale_x_continuous(breaks=seq(1980,2020,10))+
@@ -182,17 +175,10 @@ ggplot(pelagicsmpa_species_year_type_rm, aes(year, total),
   #adding lines for mpa designation years
   geom_vline(aes(xintercept = 2004), pelagicsmpa_species_year_type_rm, colour="black", size=1)+
   geom_vline(aes(xintercept = 2007), pelagicsmpa_species_year_type_rm, colour="black", size=1)+
-  #adding lines for years where PDO index was >1-- type 2, dotted 
-  #geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1987), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1983), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
   #adding MHW events 
   geom_vline(aes(xintercept = 2015), pelagicsmpa_species_year_type_rm, colour="black", size=0.75, linetype=2)+
   geom_vline(aes(xintercept = 2006), pelagicsmpa_species_year_type_rm, colour="black", size=0.75, linetype=2)+
   geom_vline(aes(xintercept = 1995), pelagicsmpa_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-
   #adding lines where ENSO over 1.5 
   annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .2)+
@@ -214,36 +200,26 @@ ggsave("MPA_line_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_
 ```
 
 ##Line Plot- All catch, year, gas, map
+Couldn't get the dimesions to graph correctly on the 3 level stacked graph, so making the location graph seperately and then joining outside of R 
+###Stacked Line Graph and gas prices 
 ```{r}
-pelagicsmpa_year$year<-as.numeric(pelagicsmpa_year$year)
-plot1<- ggplot(pelagicsmpa_year, aes(year, total))+ 
-  #geom_point()+
+pelagicsmpa_year_rm$year<-as.numeric(as.character(pelagicsmpa_year_rm$year))
+plot1<- ggplot(pelagicsmpa_year_rm, aes(year, total))+ 
   geom_line(size=1, color= "black")+
   theme_bw()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  #theme(plot.margin = unit(c(5,5,5,5), 'points'))+
-  #xlab("Year")+
+  theme(plot.title = element_text(hjust=0.5))+
   ylab("Total Caught")+
-  xlab("Years")+
-  scale_x_continuous(breaks=seq(1980,2020,10))+
-  theme(legend.text=element_text(size=7))+
-  theme(strip.text.x = element_text(size = 15))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank())+
   #adding lines for mpa designation years
-  geom_vline(aes(xintercept = 2004), pelagicsmpa_species_block_year_type_rm, colour="black", size=1)+
-  geom_vline(aes(xintercept = 2007), pelagicsmpa_species_block_year_type_rm, colour="black", size=1)+
-  #adding lines for years where PDO index was >1-- type 2, dotted 
-  #geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1987), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
-  #geom_vline(aes(xintercept = 1983), pelagicsmpa_species_block_year_type_rm, colour="grey46", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2004), pelagicsmpa_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsmpa_year_rm, colour="black", size=1)+
   #adding MHW events 
-  geom_vline(aes(xintercept = 2015), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 2006), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 1995), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=2)+
-
+  geom_vline(aes(xintercept = 2015), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=2)+
   #adding lines where ENSO over 1.5 
   annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .2)+
@@ -256,11 +232,11 @@ plot1<- ggplot(pelagicsmpa_year, aes(year, total))+
   annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .2)+
   #adding shading where PDO is over 1 
-  geom_vline(aes(xintercept = 1983), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1986), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1993), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagicsmpa_species_block_year_type_rm, colour="black", size=0.75, linetype=3)+
-  labs(title = str_wrap("CPFV catch overtime across fishing blocks encompassing Footprint, Gull Island, and Santa Barbara MPAs", 70))
+  geom_vline(aes(xintercept = 1983), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsmpa_year_rm, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime across fishing blocks encompassing Footprint, Gull Island, and Santa Barbara MPAs, adjusted gas prices, and map", 70))
 plot1
 
 plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
@@ -269,93 +245,135 @@ plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
   theme(plot.margin = unit(c(5,5,5,5), 'points'))+
   scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+   scale_x_continuous(breaks=seq(1980,2020,10))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
   labs(y = paste0("Adjusted Gas", "\n", "Price ($)"))+
-  #ylab("Adjusted Gas Price ($)")+
   xlab("Year")
 plot2
+plotstacked<-ggarrange(plot1, plot2)
+plotstacked
+ggsave("MPA_stacked_gas_all.jpeg", plot= plotstacked, width = 10, units="in", path = path_plot)
+```
 
-plot3
+###Location Map
+```{r}
 plot3<-ggplot()+ 
   geom_sf(data=CINMS_surrounding_fishing_blocks, fill="lightblue" )+
   geom_sf(data=CINMS, fill=NA)+
   geom_sf(data= MPA_shapefile, fill="darkblue", alpha=0.25, color="red")+
-  theme_classic()+
+  theme_bw()+
   annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
   annotation_north_arrow(location= "tr", which_north= "true")+
   xlab("Longitude")+
   ylab("Latitude")
 plot3
-
-plotstacked<-ggarrange(plot1, plot2, plot3, nrow=3)
-plotstacked
-ggsave("MPA_stacked_gas_all.jpeg", plot= plotstacked, width= 30, height= 80, units= "cm", path = path_plot)
+ggsave("MPA_location_map.jpeg", plot= plot3, width = 10, units="in", path = path_plot)
 ```
 
 #_______________
 #Heat Map 
-#####Blocks in 2 year bins
+##Joining shapefile + data
 ```{r}
-pelagicsmpa_species_year$year<-as.numeric(pelagicsmpa_species_year$year)
-pelagicsmpa_species_year$bin_year<-cut(pelagicsmpa_species_year$year, breaks= c(1979, 1982, 1984, 1986, 1988, 1990, 1992, 1994, 1996, 1998, 2000, 2002, 2004, 2006, 2008, 2010, 2012, 2014, 2016, 2018, 2020))
-```
+##putting in Zeros where there isn't data about fishing blocks
+complete_pelagicsmpa_year_block_rm<-tidyr::complete(pelagicsmpa_year_block_rm, block_id, year, fill=list(total=0))
 
-#####Aggregating bins
-```{r}
-pelagicsmpa_species_year$bin_year<-as.character(pelagicsmpa_species_year$bin_year)
-pelagicsMPAs_binnedyrs<-aggregate(pelagicsmpa_species_year$total, by=list(year=pelagicsmpa_species_year$bin_year, block_id= pelagicsmpa_species_year$block_id), FUN=sum)
-pelagicsMPAs_binnedyrs<-rename(pelagicsMPAs_binnedyrs, "total"= "x")
-pelagicsMPAs_binnedyrs<- replace(pelagicsMPAs_binnedyrs, is.na(pelagicsmpa_species_year), 0)
-
-```
-##Graphing
-```{r}
-#joining the shapefile of southern Californian fishing blocks and the total catch by year and block--- NEED TO CHECK TO SEE IF WE HAVE TO REMOVE BLOCKS WITH LESS THAT 3 DATA POINTS
+##joining shapefile and data
 MPA_shapefile<-rename(MPA_shapefile, "block_id"= "BLOCK10_ID")
-##Not Binned
-MPA_fishing_blocks_pelagic<-left_join(MPA_shapefile, pelagicsmpa_year_block, by= "block_id", relationship= "many-to-many", na_matches= "never")
+MPA_fishing_blocks_pelagic<-left_join(MPA_shapefile, complete_pelagicsmpa_year_block_rm, by= "block_id", relationship= "many-to-many", na_matches= "never")
+
+##removing NAs
 MPA_fishing_blocks_pelagic<- subset(MPA_fishing_blocks_pelagic, !is.na(MPA_fishing_blocks_pelagic$total))
-
-##Binned 
-
-MPA_fishing_blocks_binned_pelagic <-left_join(MPA_shapefile, pelagicsMPAs_binnedyrs, by= "block_id", relationship= "many-to-many", na_matches= "never")
-MPA_fishing_blocks_binned_pelagic<- MPA_fishing_blocks_binned_pelagic %>% drop_na(total)
-
-MPA_fishing_blocks_binned_pelagic<- subset(MPA_fishing_blocks_binned_pelagic, !is.na(MPA_fishing_blocks_binned_pelagic$total))
-
-##Year as time
-
-MPA_fishing_blocks_pelagic$year<- as.character(MPA_fishing_blocks_pelagic$year)
-MPA_fishing_blocks_pelagic$year<-lubridate::y(MPA_fishing_blocks_binned_pelagic$year)
-##Plot
-plot4<-ggplot() + 
-  geom_sf(data = MPA_fishing_blocks_pelagic)+
-    geom_sf(data = MPA_fishing_blocks_pelagic, mapping = aes(fill = total))+
-  scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100")+ 
-  #facet_wrap(~year)+
-  coord_sf(xlim= c(-118, -120), ylim = c(33.3, 34.0))+
-  #coord_sf()+
-  #theme(axis.line=element_blank(),
-   #   axis.text.x=element_blank(),
-    #  axis.text.y=element_blank(),
-     # axis.ticks=element_blank(),
-      #axis.title.x=element_blank(),
-      #axis.title.y=element_blank(),
-      #panel.background=element_blank(),
-      #panel.border=element_blank(),
-      #panel.grid.major=element_blank(),
-      #panel.grid.minor=element_blank(),
-      #plot.background=element_blank())+
-  ggtitle("CPFV catch by block in CDFW fishing blocks associated with the Footprint, Gull Island, and Santa Barbara MPAs")+
-  transition_states(states = MPA_fishing_blocks_pelagic$year)
-   #theme(plot.title = element_text(hjust = 0.5))
- # transition_time(MPA_fishing_blocks_pelagic$year)
-
-  
-plot4  
-animate(plot4)  
- 
-#  geom_sf(data = SoCal_fishing_blocks, mapping = aes(fill = NAME), show.legend = FALSE)
 ```
 
+###Path
+```{r}
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA/MPA_heatmaps_by_year"
+```
+
+
+##"For loop" graphing
+iterative loop for printing each block 
+###For before MPA designation state= 2004
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic$year<-as.character(as.factor(MPA_fishing_blocks_pelagic$year))
+MPA_fishing_blocks_pelagic_2004<- subset(MPA_fishing_blocks_pelagic, year<2004)
+
+##Graphing and saving
+for(i in unique(MPA_fishing_blocks_pelagic_2004$year)){
+  x<-ggplot()+
+    geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+    geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004, year==i & year<2004),mapping =aes(fill=total))+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+    theme_classic()+
+    annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true")+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV Catch in Footprint, Gull Island, and Santa Barbara MPAs", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_", i, ".png") )
+}
+```
+
+
+
+###For after state designation MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic_2004_2007<- subset(MPA_fishing_blocks_pelagic, year>2003 & year<2007)
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2004_2007$year)){
+  x<- ggplot()+
+              geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+              geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004_2007, 
+                                   year==i & year>2003 & year<2007), aes(fill=total))+
+              geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)
+              scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+              theme_classic()+
+              annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), 
+                               pad_x = unit(0.7, "cm"))+
+              annotation_north_arrow(location= "tr", which_north= "true")+  
+              xlab("Longitude")+
+              ylab("Latitude")+
+                ggtitle("CPFV Catch in Footprint, Gull Island, and Santa Barbara MPAs", 
+                        subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_", i, ".png") )
+}
+```
+
+### For after fed designation of MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic_2007<- subset(MPA_fishing_blocks_pelagic, year>2006)
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2007$year)){
+  x<- ggplot()+
+      geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+      geom_sf(data= subset(MPA_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=total))+
+      geom_sf(data=footprint_gull_sb_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+      geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+      scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 35000))+
+      theme_classic()+
+      annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), 
+                       pad_x = unit(0.7, "cm"))+
+      annotation_north_arrow(location= "tr", which_north= "true")+
+      xlab("Longitude")+
+      ylab("Latitude")+
+      ggtitle("CPFV Catch in Footprint, Gull Island, and Santa Barbara MPAs", 
+              subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_", i, ".png") )
+}
+```
