@@ -459,7 +459,16 @@ CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Barracuda, C
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Bonito, Pacific"] <- "Bonito"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Opah"] <- "Opah"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Yellowtail"] <- "Yellowtail"
+```
+
+##Adding caught + released for total caught
+```{r}
+CPFV_pelagic_subset<-CPFV_pelagic_subset %>% 
+  mutate(total_caught= n_kept + n_released)
+
+```
 
 ##Save dataframe
+```{r}
 saveRDS(CPFV_pelagic_subset, file.path(path_out, "CPFV_pelagic_species_subset.Rds"))
 ```
