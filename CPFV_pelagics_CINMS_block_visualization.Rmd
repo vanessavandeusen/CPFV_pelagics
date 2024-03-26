@@ -131,33 +131,65 @@ CINMS_shpfile_blocks<- CINMS_surrounding_fishing_blocks%>% subset(BLOCK10_ID==74
 CPFV_pelagics_allblocks_rm<-subset(CPFV_pelagics_allblocks, CPFV_pelagics_allblocks$species_type != "Opah"& CPFV_pelagics_allblocks$species_type != "Shark"& CPFV_pelagics_allblocks$species_type != "Baitfish"& CPFV_pelagics_allblocks$species_type != "Billfish")
 ```
 
-##Aggregating by year 
+##Aggregating by year/CPUE 
 ```{r}
-pelagicsCINMS_year_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
-pelagicsCINMS_year_rm<-rename(pelagicsCINMS_year_rm, "total"= "x")
+CINMS_sum_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_years<-rename(CINMS_sum_years, "total_catch"= "x")
+CINMS_count_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_years<-rename(CINMS_count_years, "number_of_trips"= "x")
+
+pelagicsCINMS_year_rm<-CINMS_sum_years%>% left_join(CINMS_count_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
-##Aggregating by year and block
+##Aggregating by year and block/CPUE
 ```{r}
 ##aggregating by block and year
-pelagicsCINMS_year_block_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
-pelagicsCINMS_year_block_rm<-rename(pelagicsCINMS_year_block_rm, "total"= "x")
-pelagicsCINMS_year_block_rm<- replace(pelagicsCINMS_year_block_rm, is.na(pelagicsCINMS_year_block_rm), 0)
+CINMS_sum_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_year_block<-rename(CINMS_sum_year_block, "total_catch"= "x")
+CINMS_sum_year_block<- replace(CINMS_sum_year_block, is.na(CINMS_sum_year_block), 0)
+
+CINMS_count_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_year_block<-rename(CINMS_count_year_block, "number_of_trips"= "x")
+CINMS_count_year_block<- replace(CINMS_count_year_block, is.na(CINMS_count_year_block), 0)
+
+pelagicsCINMS_year_block_rm<-CINMS_sum_year_block%>% left_join(CINMS_count_year_block, by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
 ##Aggregating by species, year, block
 ```{r}
-pelagicsCINMS_species_year_rm<-aggregate(CPFV_pelagics_allblocks_rm$n_kept, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
-pelagicsCINMS_species_year_rm<-rename(pelagicsCINMS_species_year_rm, "total"= "x")
-pelagicsCINMS_species_year_rm$year<-as.character(pelagicsCINMS_species_year_rm$year)
+CINMS_sum_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_species_year_block<-rename(CINMS_sum_species_year_block, "total_catch"= "x")
+CINMS_sum_species_year_block$year<-as.character(CINMS_sum_species_year_block$year)
 
+CINMS_count_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_species_year_block<-rename(CINMS_count_species_year_block, "number_of_trips"= "x")
+CINMS_count_species_year_block$year<-as.character(CINMS_count_species_year_block$year)
+
+pelagicsCINMS_species_year_block_rm<-CINMS_sum_species_year_block%>% left_join(CINMS_count_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
-##Aggregating by species type, year
+##Aggregating by species type, year/CPUE
 ```{r}
-pelagicsCINMS_species_year_type_rm<-aggregate(pelagicsCINMS_species_year_rm$total, by=list(species_type=pelagicsCINMS_species_year_rm$species_type, year=pelagicsCINMS_species_year_rm$year), FUN=sum)
-pelagicsCINMS_species_year_type_rm<-rename(pelagicsCINMS_species_year_type_rm, "total"= "x")
+CINMS_sum_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_year_species<-rename(CINMS_sum_year_species, "total_catch"= "x")
+
+CINMS_count_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_year_species<-rename(CINMS_count_year_species, "number_of_trips"= "x")
+
+pelagicsCINMS_species_year_type_rm<-CINMS_sum_year_species%>% left_join(CINMS_count_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
+
 
 #_______________
 #Graphing
