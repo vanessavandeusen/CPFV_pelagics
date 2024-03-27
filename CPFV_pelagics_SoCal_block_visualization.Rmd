@@ -69,33 +69,63 @@ CPFV_pelagics_socal$year<-as.factor(CPFV_pelagics_socal$year)
 CPFV_pelagics_socal_rm<-subset(CPFV_pelagics_socal, CPFV_pelagics_socal$species_type != "Opah"& CPFV_pelagics_socal$species_type != "Shark"& CPFV_pelagics_socal$species_type != "Baitfish"& CPFV_pelagics_socal$species_type != "Billfish")
 ```
 
-##Aggregating by year 
+##Aggregating by year/CPUE 
 ```{r}
-pelagicssocal_year_rm<-aggregate(CPFV_pelagics_socal_rm$n_kept, by=list(year=CPFV_pelagics_socal_rm$year), FUN=sum)
-pelagicssocal_year_rm<-rename(pelagicssocal_year_rm, "total"= "x")
+socal_sum_years<-aggregate(CPFV_pelagics_socal_rm$total_caught, by=list(year=CPFV_pelagics_socal_rm$year), FUN=sum)
+socal_sum_years<-rename(socal_sum_years, "total_catch"= "x")
+socal_count_years<-aggregate(CPFV_pelagics_socal_rm$total_caught, by=list(year=CPFV_pelagics_socal_rm$year), FUN=length)
+socal_count_years<-rename(socal_count_years, "number_of_trips"= "x")
+
+pelagicssocal_year_rm<-socal_sum_years%>% left_join(socal_count_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicssocal_year_rm<-pelagicssocal_year_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
-##Aggregating by year and block
+##Aggregating by year and block/CPUE
 ```{r}
 ##aggregating by block and year
-pelagicssocal_year_block_rm<-aggregate(CPFV_pelagics_socal_rm$n_kept, by=list(year=CPFV_pelagics_socal_rm$year, block_id=CPFV_pelagics_socal_rm$block_id), FUN=sum)
-pelagicssocal_year_block_rm<-rename(pelagicssocal_year_block_rm, "total"= "x")
-pelagicssocal_year_block_rm<- replace(pelagicssocal_year_block_rm, is.na(pelagicssocal_year_block_rm), 0)
+ssocal_sum_year_block<-aggregate(CPFV_pelagics_socal_rm$total_caught, by=list(year=CPFV_pelagics_socal_rm$year, block_id=CPFV_pelagics_socal_rm$block_id), FUN=sum)
+ssocal_sum_year_block<-rename(ssocal_sum_year_block, "total_catch"= "x")
+ssocal_sum_year_block<- replace(ssocal_sum_year_block, is.na(ssocal_sum_year_block), 0)
+ssocal_count_year_block<-aggregate(CPFV_pelagics_socal_rm$total_caught, by=list(year=CPFV_pelagics_socal_rm$year, block_id=CPFV_pelagics_socal_rm$block_id), FUN=length)
+ssocal_count_year_block<-rename(ssocal_count_year_block, "number_of_trips"= "x")
+ssocal_count_year_block<- replace(ssocal_count_year_block, is.na(ssocal_count_year_block), 0)
+
+pelagicssocal_year_block_rm<-ssocal_sum_year_block%>% left_join(ssocal_count_year_block, by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+
+pelagicssocal_year_block_rm<-pelagicssocal_year_block_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
-
-##Aggregating by species, year, block
+##Aggregating by species, year, block/CPUE
 ```{r}
-pelagicssocal_species_year_rm<-aggregate(CPFV_pelagics_socal_rm$n_kept, by=list(year=CPFV_pelagics_socal_rm$year, species=CPFV_pelagics_socal_rm$species_name, species_type=CPFV_pelagics_socal_rm$species_type, block_id= CPFV_pelagics_socal_rm$block_id), FUN=sum)
-pelagicssocal_species_year_rm<-rename(pelagicssocal_species_year_rm, "total"= "x")
-pelagicssocal_species_year_rm$year<-as.character(pelagicssocal_species_year_rm$year)
+socal_sum_species_year_block<-aggregate(CPFV_pelagics_socal_rm$n_kept, by=list(year=CPFV_pelagics_socal_rm$year, species=CPFV_pelagics_socal_rm$species_name, species_type=CPFV_pelagics_socal_rm$species_type, block_id= CPFV_pelagics_socal_rm$block_id), FUN=sum)
+socal_sum_species_year_block<-rename(socal_sum_species_year_block, "total_catch"= "x")
+socal_sum_species_year_block$year<-as.character(socal_sum_species_year_block$year)
+
+socal_count_species_year_block<-aggregate(CPFV_pelagics_socal_rm$n_kept, by=list(year=CPFV_pelagics_socal_rm$year, species=CPFV_pelagics_socal_rm$species_name, species_type=CPFV_pelagics_socal_rm$species_type, block_id= CPFV_pelagics_socal_rm$block_id), FUN=length)
+socal_count_species_year_block<-rename(socal_count_species_year_block, "number_of_trips"= "x")
+socal_count_species_year_block$year<-as.character(socal_count_species_year_block$year)
+
+pelagicssocal_species_year_rm<-socal_sum_species_year_block%>% left_join(socal_count_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicssocal_species_year_rm<-pelagicssocal_species_year_rm %>%
+  mutate(CPUE= total_catch/number_of_trips)
 
 ```
 
-##Aggregating by species type, year
+##Aggregating by species type, year/CPUE
 ```{r}
-pelagics_socal_species_year_type_rm<-aggregate(pelagicssocal_species_year_rm$total, by=list(species_type=pelagicssocal_species_year_rm$species_type, year=pelagicssocal_species_year_rm$year), FUN=sum)
-pelagics_socal_species_year_type_rm<-rename(pelagics_socal_species_year_type_rm, "total"= "x")
+socal_sum_species_year_type_rm<-aggregate(pelagicssocal_species_year_rm$total, by=list(species_type=pelagicssocal_species_year_rm$species_type, year=pelagicssocal_species_year_rm$year), FUN=sum)
+socal_sum_species_year_type_rm<-rename(socal_sum_species_year_type_rm, "total_catch"= "x")
+
+socal_count_species_year_type_rm<-aggregate(pelagicssocal_species_year_rm$total, by=list(species_type=pelagicssocal_species_year_rm$species_type, year=pelagicssocal_species_year_rm$year), FUN=length)
+socal_count_species_year_type_rm<-rename(socal_count_species_year_type_rm, "number_of_trips"= "x")
+
+pelagics_socal_species_year_type_rm<-socal_sum_species_year_type_rm%>% left_join(socal_count_species_year_type_rm, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagics_socal_species_year_type_rm<-pelagics_socal_species_year_type_rm%>%
+  mutate(CPUE= total_catch/number_of_trips)
 ```
 
 #_______________
@@ -145,46 +175,99 @@ ggsave("Socal_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path
 
 ```
 ##Line Plot- species type, year
+####PDO color coded-- +1/-1
 ```{r}
 ##Facet wrapped 
+pelagics_socal_species_year_type_rm$year<-as.character(pelagics_socal_species_year_type_rm$year)
 pelagics_socal_species_year_type_rm$year<-as.numeric(pelagics_socal_species_year_type_rm$year)
-ggplot(pelagics_socal_species_year_type_rm, aes(year, total), )+ 
-  geom_line(size=1, color= "black")+
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagics_socal_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
   facet_wrap(~species_type)+
-  theme_bw()+
+  theme_classic()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Total Caught")+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
   xlab("Years")+
-  scale_x_continuous(breaks=seq(1980,2020,10))+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
   theme(legend.text=element_text(size=7))+
   theme(strip.text.x = element_text(size = 15))+
-  #adding lines for mpa designation years
-  geom_vline(aes(xintercept = 2004), pelagics_socal_species_year_type_rm, colour="black", size=1)+
-  geom_vline(aes(xintercept = 2007), pelagics_socal_species_year_type_rm, colour="black", size=1)+
-  #adding lines for years where PDO index was >1-- type 2, dotted 
-  geom_vline(aes(xintercept = 2015), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 2006), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 1995), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  #adding lines where ENSO over 1.5 
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+
+ggsave("SoCal_line_pelagic_strong_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
+###PDO color coded-- All non-neutral PDO
+```{r}
+##Facet wrapped 
+pelagics_socal_species_year_type_rm$year<-as.character(pelagics_socal_species_year_type_rm$year)
+pelagics_socal_species_year_type_rm$year<-as.numeric(pelagics_socal_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagics_socal_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1980, xmax = 1982, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1983, xmax = 1985, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1992, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1995, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 2003, xmax = 2004, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 2014, xmax = 2017, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
   annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  #adding shading where PDO is over 1 
-  geom_vline(aes(xintercept = 1983), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1986), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1993), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagics_socal_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-labs(title = str_wrap("CPFV catch in Southern California fishing blocks", 70))
-ggsave("SoCal_line_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+        alpha = .1)+
+  annotate("rect", xmin = 1989, xmax = 1992, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1994, xmax = 1995, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1998, xmax = 2003, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2004, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+ggsave("SoCal_line_pelagic_all_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
 ```
 
 ##Line Plot- All catch, year, gas, map

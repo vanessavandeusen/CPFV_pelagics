@@ -1,0 +1,68 @@
+---
+title: "CPFV_pelagics_Temp_Anomaly_Data_Processing"
+author: "Van Deusen"
+date: "2024-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(tidyr)
+library(viridis)
+library(quantmod) 
+library(egg)
+library(ggspatial)
+path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
+```
+
+## Importing data
+```{r}
+#Pacific Decadal Oscillation Data from https://www.ncei.noaa.gov/access/monitoring/pdo/
+pdo<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/PDO_data.csv")
+
+#MHW data from https://oceanview.pfeg.noaa.gov/erddap/tabledap/cciea_OC_MHW_EV.htmlTable
+MHW <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MHW.csv")
+```
+
+
+# Extracting years PDO data
+Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
+```{r}
+#Average across months 
+pdo$avg<-rowMeans(pdo[, 2:13])
+
+##PDO over +1 
+strong_pdo<-subset(pdo, avg >= 1 & Year >= 1980 | avg <= -1 & Year >= 1980)
+
+##Non-neutral PDO +0.1< or >-0.1
+notneutral_pdo<-subset(pdo, avg >= 0.1 & Year >= 1980 | avg <= -0.1 & Year >= 1980)
+
+#Save CSV
+write.csv(strong_pdo,file.path(path_out, "strong_1_pdo.csv"))
+
+#Save CSV
+write.csv(notneutral_pdo,file.path(path_out, "notneutral_pdo.csv"))
+```
+
+# Extracting years MHW data
+Only including marine heat waves that were 2 STDEVs from normal
+-- MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
+```{r}
+#Format time and add year 
+MHW$time<- lubridate::ymd(MHW$time)
+MHW$Year<-MHW$time
+MHW$Year <-format(as.Date(MHW$Year , format= "%Y/%m/%d"), "%Y")
+
+#Subset by intensity 
+MHW_over2<-subset(MHW, MHW$mean_intensity >= 2)
+
+```

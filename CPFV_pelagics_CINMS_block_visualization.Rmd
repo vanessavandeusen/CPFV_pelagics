@@ -49,7 +49,8 @@ CINMS_fishing_blocks<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_pro
 gas_adjusted2020<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/gas_adjusted2020.csv")
 CINMS_state_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_CINMS/MPA_State_CINMS_shapefile/CINMS_State_MPAs.shp")
 CINMS_fed_MPA<-st_read("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MPA_CINMS/MPA_Fed_CINMS_shapefile/CINMS_Fed_MPAs.shp")
-
+designation_MHW_ENSO_years<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/Geom_vlines_designation_MHW_ENSO.csv")
+strong_1_pdo<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/strong_1_pdo.csv")
 ```
 
 #______________
@@ -239,48 +240,101 @@ ggsave("CINMS_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path
 ```
 
 ##Line Plot- species type, year
+
+####PDO color coded-- +1/-1
 ```{r}
 ##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
 pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
-ggplot(pelagicsCINMS_species_year_type_rm, aes(year, total), 
-       )+ 
-  geom_line(size=1, color= "black")+
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
   facet_wrap(~species_type)+
-  theme_bw()+
+  theme_classic()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Total Caught")+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
   xlab("Years")+
-  scale_x_continuous(breaks=seq(1980,2020,10))+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
   theme(legend.text=element_text(size=7))+
   theme(strip.text.x = element_text(size = 15))+
-  #adding lines for mpa designation years
-  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_year_type_rm, colour="black", size=1)+
-  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_year_type_rm, colour="black", size=1)+
-  #adding MHW events 
-  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 2006), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 1995), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=2)+
-  #adding lines where ENSO over 1.5 
-  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  #adding shading where PDO is over 1 
-  geom_vline(aes(xintercept = 1983), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1993), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_year_type_rm, colour="black", size=0.75, linetype=3)+
-labs(title = str_wrap("CPFV catch in CINMS fishing blocks", 70))
-ggsave("CINMS_line_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+
+ggsave("CINMS_line_pelagic_strong_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
 ```
+###PDO color coded-- All non-neutral PDO
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1980, xmax = 1982, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1983, xmax = 1985, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1992, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1995, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 2003, xmax = 2004, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 2014, xmax = 2017, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1989, xmax = 1992, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1994, xmax = 1995, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1998, xmax = 2003, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2004, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+ggsave("CINMS_line_pelagic_all_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
 
 ##Line Plot- All catch, year, gas, map
 Couldn't get the dimesions to graph correctly on the 3 level stacked graph, so making the location graph seperately and then joining outside of R 
