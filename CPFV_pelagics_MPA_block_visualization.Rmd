@@ -359,15 +359,18 @@ ggsave("MPA_stacked_gas_all.jpeg", plot= plotstacked, width = 7, height = 8, uni
 ```{r}
 plot3<-ggplot()+ 
   geom_sf(data=CINMS_surrounding_fishing_blocks, fill="lightblue" )+
-  geom_sf(data=CINMS, fill=NA)+
   geom_sf(data= MPA_shapefile, fill="darkblue", alpha=0.25, color="black")+
+  geom_sf(data=CINMS_fed_MPA, color="black", fill=NA, alpha= 0.25)+
+   geom_sf(data=CINMS_state_MPA, color="black", fill= NA, alpha=0.25)+
+  geom_sf(data=CINMS, fill=NA)+
   theme_classic()+
-  annotation_scale(location= "bl", pad_y = unit(1, "cm"), pad_x = unit(1, "cm"))+
-  annotation_north_arrow(location= "tr", which_north= "true", width= unit(1.5, "cm"), style= north_arrow_fancy_orienteering(), pad_x = unit(1, "cm"))+
+  annotation_scale(location= "bl", pad_y = unit(1, "cm"), pad_x = unit(1.5, "cm"))+
+  annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"), 
+                  height= unit(1, "cm"), style= north_arrow_fancy_orienteering(), pad_x = unit(1, "cm"))+
   xlab("Longitude")+
   ylab("Latitude")
 plot3
-ggsave("MPA_location_map.jpeg", plot= plot3, width = 10, units="in", path = path_plot)
+ggsave("MPA_location_map.jpeg", plot= plot3, width = 5, units="in", path = path_plot)
 ```
 
 #_______________
@@ -382,18 +385,24 @@ MPA_shapefile<-rename(MPA_shapefile, "block_id"= "BLOCK10_ID")
 MPA_fishing_blocks_pelagic<-left_join(MPA_shapefile, complete_pelagicsmpa_year_block_rm, by= "block_id", relationship= "many-to-many", na_matches= "never")
 
 ##removing NAs
-MPA_fishing_blocks_pelagic<- subset(MPA_fishing_blocks_pelagic, !is.na(MPA_fishing_blocks_pelagic$total))
+MPA_fishing_blocks_pelagic<-replace(MPA_fishing_blocks_pelagic, is.na(MPA_fishing_blocks_pelagic), 0)
+
+
+##Calculating Proportional catch (total/max ever)
+MPA_fishing_blocks_pelagic<-MPA_fishing_blocks_pelagic %>%
+  mutate(proportional_catch= total_catch/254143)
 ```
 
-###Path
+
+
+#Independent scale/CPUE 
+##Path
 ```{r}
-path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA/MPA_heatmaps_by_year"
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA/MPA_heatmaps_by_year/independent_scale"
 ```
-
 
 ##"For loop" graphing
 iterative loop for printing each block 
-###Independent scale
 ####For before MPA designation state= 2004
 ```{r}
 ##Subsetting so can add MPAs as designated
@@ -438,11 +447,11 @@ for(i in unique(MPA_fishing_blocks_pelagic_2004_2007$year)){
     geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
     scale_fill_gradientn(colours=rev(magma(6)),
                          name="Catch per unit effort \n(fish caught/trip)",
-                         na.value = "grey100", limits= c(0, 200))+
+                         na.value = "grey100", limits= c(-1, 200))+
     theme_classic()+
     annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
     annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
-                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           height= unit(1, "cm"), style= north_arrow_fancy_orienteering(), 
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
     xlab("Longitude")+
     ylab("Latitude")+
@@ -452,6 +461,9 @@ for(i in unique(MPA_fishing_blocks_pelagic_2004_2007$year)){
   ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_individual_", i, ".png") )
 }
 ```
+
+
+
 
 #### For after fed designation of MPAs
 ```{r}
@@ -467,7 +479,7 @@ for(i in unique(MPA_fishing_blocks_pelagic_2007$year)){
       geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
       scale_fill_gradientn(colours=rev(magma(6)),
                          name="Catch per unit effort \n(fish caught/trip)",
-                         na.value = "grey100", limits= c(0, 200))+
+                         na.value = "grey100", limits= c(-1, 200))+
     theme_classic()+
     annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
     annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -481,3 +493,186 @@ for(i in unique(MPA_fishing_blocks_pelagic_2007$year)){
   ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_individual_", i, ".png") )
 }
 ```
+
+
+#Same scale/CPUE 
+###Path
+```{r}
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA/MPA_heatmaps_by_year/same_scale_geographic"
+```
+
+####For before MPA designation state= 2004
+```{r}
+##Graphing and saving
+for(i in unique(MPA_fishing_blocks_pelagic_2004$year)){
+  x<-ggplot()+
+    geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+    geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004, year==i & year<2004),mapping =aes(fill=CPUE))+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Catch per unit effort \n(fish caught/trip)",
+                         na.value = "grey100", limits= c(0, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV CPUE in Footprint, Gull Island, and Santa Barbara MPAs", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_same_scale_", i, ".png") )
+}
+```
+
+
+####For after state designation MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic_2004_2007<- subset(MPA_fishing_blocks_pelagic, year>2003 & year<2007)
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2004_2007$year)){
+  x<- ggplot()+
+    geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+    geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004_2007, 
+            year==i & year >2003 & year< 2007), aes(fill=CPUE))+
+    geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Catch per unit effort \n(fish caught/trip)",
+                         na.value = "grey100", limits= c(-1, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"), style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV CPUE in Footprint, Gull Island, and Santa Barbara MPAs", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_same_scale_", i, ".png") )
+}
+```
+
+
+
+
+#### For after fed designation of MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic_2007<- subset(MPA_fishing_blocks_pelagic, year>2006)
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2007$year)){
+  x<- ggplot()+
+      geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+      geom_sf(data= subset(MPA_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=CPUE))+
+      geom_sf(data=footprint_gull_sb_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+      geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+      scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Catch per unit effort \n(fish caught/trip)",
+                         na.value = "grey100", limits= c(-1, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV CPUE in Footprint, Gull Island, and Santa Barbara MPAs", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_same_scale_", i, ".png") )
+}
+```
+
+#Same scale/Proportion total
+###Path
+```{r}
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/MPA/MPA_heatmaps_by_year/proportion_total_same_scale"
+```
+
+####For before MPA designation state= 2004
+
+```{r}
+##Graphing and saving
+for(i in unique(MPA_fishing_blocks_pelagic_2004$year)){
+  x<-ggplot()+
+    geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+    geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004, year==i & year<2004),mapping =aes(fill=proportional_catch))+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(0, 1))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV Proportional Catch (# fish caught/maximum # fish ever caught) \nin Footprint, Gull Island, and Santa Barbara Island MPA Associated Blocks", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_proportional_same_scale_", i, ".png") )
+}
+```
+####For after state designation MPAs
+```{r}
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2004_2007$year)){
+  x<- ggplot()+
+    geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+    geom_sf(data= subset(MPA_fishing_blocks_pelagic_2004_2007, 
+            year==i & year >2003 & year< 2007), aes(fill=proportional_catch))+
+    geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(-1, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"), style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV Proportional Catch (# fish caught/maximum # fish ever caught) \nin Footprint, Gull Island, and Santa Barbara Island MPA Associated Blocks", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_proportion_same_scale_", i, ".png") )
+}
+```
+
+
+
+
+#### For after fed designation of MPAs
+```{r}
+##Subsetting so can add MPAs as designated
+MPA_fishing_blocks_pelagic_2007<- subset(MPA_fishing_blocks_pelagic, year>2006)
+
+##Graphing and printing
+for(i in unique(MPA_fishing_blocks_pelagic_2007$year)){
+  x<- ggplot()+
+      geom_sf(data=footprint_gull_sb_surrounding_blocks, fill="white")+
+      geom_sf(data= subset(MPA_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=proportional_catch))+
+      geom_sf(data=footprint_gull_sb_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+      geom_sf(data=footprint_gull_sb_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+      scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(-1, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle("CPFV Proportional Catch (# fish caught/maximum # fish ever caught) \nin Footprint, Gull Island, and Santa Barbara Island MPA Associated Blocks", 
+            subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("MPA_heatmap_proportion_same_scale_", i, ".png") )
+}
+```
+

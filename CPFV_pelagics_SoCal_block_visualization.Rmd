@@ -355,12 +355,18 @@ SoCal_fishing_blocks<-rename(SoCal_fishing_blocks, "block_id"= "BLOCK10_ID")
 SoCal_fishing_blocks_pelagic<-left_join(SoCal_fishing_blocks, complete_pelagicssocal_year_block_rm, by= "block_id", relationship= "many-to-many", na_matches= "never")
 
 ##removing NAs
-#SoCal_fishing_blocks_pelagic<- subset(SoCal_fishing_blocks_pelagic, !is.na(SoCal_fishing_blocks_pelagic$total))
+SoCal_fishing_blocks_pelagic<- replace(SoCal_fishing_blocks_pelagic, is.na(SoCal_fishing_blocks_pelagic), 0)
+
+##Calculating Proportional catch (total/max ever)
+SoCal_fishing_blocks_pelagic<-SoCal_fishing_blocks_pelagic %>%
+  mutate(proportional_catch= total_catch/254143)
 ```
 
+
+##Independent scale/CPUE
 ###Path
 ```{r}
-path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year"
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year/independent_scale"
 
 ```
 
@@ -374,21 +380,22 @@ SoCal_fishing_blocks_pelagic_2004<- subset(SoCal_fishing_blocks_pelagic, year<20
 ##Graphing and saving
 for(i in unique(SoCal_fishing_blocks_pelagic_2004$year)){
   x<-ggplot()+
-              geom_sf(data=SoCal_fishing_blocks, fill="white")+
-              geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=total))+
+    geom_sf(data=SoCal_fishing_blocks, fill="white")+
+    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=CPUE))+
     scale_fill_gradientn(colours=rev(magma(6)),
                          name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 260000))+
-  theme_classic()+
-  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.1, "cm"))+
-  annotation_north_arrow(location= "tr", which_north= "true")+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  ggtitle(label =  "Southern California CPFV Catch", 
-    subtitle= paste("Year", i, sep = "-"))+
-    theme(plot.title = element_text(hjust = 0.5, size=20))
-  
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_", i, ".png") )
+                         na.value = "grey100", limits= c(0, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+        subtitle= paste("Year", i, sep = "-"))
+
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
 }
 ```
 
@@ -400,20 +407,24 @@ SoCal_fishing_blocks_pelagic_2004_2007<- subset(SoCal_fishing_blocks_pelagic, ye
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2004_2007$year)){
   x<- ggplot()+
-              geom_sf(data=SoCal_fishing_blocks, fill="white")+
-              geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004_2007, year==i & year>2003 & year<2007), aes(fill=total))+
-              geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+    geom_sf(data=SoCal_fishing_blocks, fill="white")+
+    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004_2007, year==i & year>2003 & year<2007),
+            aes(fill=CPUE))+
+    geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
     scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total pelagic catch",
-                         na.value = "grey100", limits= c(0, 260000))+
-  theme_classic()+
-  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
-  annotation_north_arrow(location= "tr", which_north= "true")+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  ggtitle(label =  "Southern California CPFV Catch", 
-    subtitle= paste("Year", i, sep = "-"))+
-    theme(plot.title = element_text(hjust = 0.5, size=20))
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 600))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+        subtitle= paste("Year", i, sep = "-"))
+
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
 
   
   ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_", i, ".png") )
@@ -428,22 +439,109 @@ SoCal_fishing_blocks_pelagic_2007<- subset(SoCal_fishing_blocks_pelagic, year>20
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2007$year)){
   x<- ggplot()+
-              geom_sf(data=SoCal_fishing_blocks, fill="white")+
-              geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=total))+
-              geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
-              geom_sf(data=CINMS_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
-    scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Number of total pelagic catch",
-                         na.value = "grey100", limits= c(0, 260000))+
-  theme_classic()+
-  annotation_scale(location= "tl", width_hint= 0.2, pad_y = unit(0.1, "cm"), pad_x = unit(0.7, "cm"))+
-  annotation_north_arrow(location= "tr", which_north= "true")+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  ggtitle(label =  "Southern California CPFV Catch", 
-    subtitle= paste("Year", i, sep = "-"))+
-    theme(plot.title = element_text(hjust = 0.5, size=20)) 
+      geom_sf(data=SoCal_fishing_blocks, fill="white")+
+      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=CPUE))+
+      geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+      geom_sf(data=CINMS_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+      scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Total Pelagic Catch",
+                         na.value = "grey100", limits= c(0, 600))+
+      theme_classic()+
+      annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+      annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+      xlab("Longitude")+
+      ylab("Latitude")+
+      ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+        subtitle= paste("Year", i, sep = "-"))
+
   
   ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_", i, ".png") )
+}
+```
+
+##Same scale/Proportion of total
+###Path
+```{r}
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year/proportion_total_same_scale"
+
+```
+
+###"For loop" graphing
+###For before MPA designation state= 2004
+```{r}
+##Graphing and saving
+for(i in unique(SoCal_fishing_blocks_pelagic_2004$year)){
+  x<-ggplot()+
+    geom_sf(data=SoCal_fishing_blocks, fill="white")+
+    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=proportional_catch))+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(0, 1))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle(label =  "Southern California CPFV Proportional Catch \n(# fish caught/maximum # fish ever caught)", 
+        subtitle= paste("Year", i, sep = "-"))
+
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_proportion_same_scale_", i, ".png") )
+}
+```
+
+###For after state designation MPAs
+```{r}
+##Graphing and printing
+for(i in unique(SoCal_fishing_blocks_pelagic_2004_2007$year)){
+  x<- ggplot()+
+    geom_sf(data=SoCal_fishing_blocks, fill="white")+
+    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2004_2007, year==i & year>2003 & year<2007),
+            aes(fill=proportional_catch))+
+    geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+    scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(0, 1))+
+    theme_classic()+
+    annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+    annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+    xlab("Longitude")+
+    ylab("Latitude")+
+    ggtitle(label =  "Southern California CPFV Proportional Catch \n(# fish caught/maximum # fish ever caught)", 
+        subtitle= paste("Year", i, sep = "-"))
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_proportion_same_scale_", i, ".png") )
+}
+```
+
+### For after fed designation of MPAs
+```{r}
+##Graphing and printing
+for(i in unique(SoCal_fishing_blocks_pelagic_2007$year)){
+  x<- ggplot()+
+      geom_sf(data=SoCal_fishing_blocks, fill="white")+
+      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=proportional_catch))+
+      geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
+      geom_sf(data=CINMS_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
+      scale_fill_gradientn(colours=rev(magma(6)),
+                         name="Proportional Catch \n(# fish caught/ \nmaximum # fish caught)",
+                         na.value = "grey100", limits= c(0, 1))+
+      theme_classic()+
+      annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
+      annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
+                           height= unit(1, "cm"),style= north_arrow_fancy_orienteering(), 
+                           pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
+      xlab("Longitude")+
+      ylab("Latitude")+
+      ggtitle(label =  "Southern California CPFV Proportional Catch \n(# fish caught/maximum # fish ever caught)", 
+        subtitle= paste("Year", i, sep = "-"))
+
+  
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_proportion_same_scale_", i, ".png") )
 }
 ```
