@@ -414,10 +414,10 @@ CPFV_pelagic_subset<-CPFV_data%>% subset(comm_name_orig=="Barracuda, California"
                                               comm_name_orig=="Bonito, Pacific"|
                                               comm_name_orig=="Anchovy, northern"|
                                               comm_name_orig=="dolphin (fish)"|
-                                              comm_name_orig=="Mackerel, jack"|
-                                              comm_name_orig=="Mackerel, Pacific"|
+                                              #comm_name_orig=="Mackerel, jack"|
+                                              #comm_name_orig=="Mackerel, Pacific"|
                                               comm_name_orig=="Marlin, striped"|
-                                              comm_name_orig=="Mackerel, unspecified"|
+                                              #comm_name_orig=="Mackerel, unspecified"|
                                               comm_name_orig=="Opah"|
                                               #comm_name_orig=="Seabass, white"|
                                               comm_name_orig=="Shark, blue"|
@@ -448,9 +448,9 @@ CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Tuna, albaco
                              CPFV_pelagic_subset$species_name=="Tuna, skipjack, black"|
                              CPFV_pelagic_subset$species_name=="Tuna, unspecified"|
                              CPFV_pelagic_subset$species_name=="Tuna, yellowfin"] <-"Tuna"
-CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Mackerel, jack"|
-                             CPFV_pelagic_subset$species_name=="Mackerel, Pacific"|
-                             CPFV_pelagic_subset$species_name=="Mackerel, unspecified" ] <- "Mackerel"
+#CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Mackerel, jack"|
+                             #CPFV_pelagic_subset$species_name=="Mackerel, Pacific"|
+                             #CPFV_pelagic_subset$species_name=="Mackerel, unspecified" ] <- "Mackerel"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Marlin, striped"|
                              CPFV_pelagic_subset$species_name=="Swordfish"] <- "Billfish"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Anchovy, northern"|
@@ -461,7 +461,7 @@ CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Opah"] <- "O
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Yellowtail"] <- "Yellowtail"
 ```
 
-##Adding caught + released for total caught
+##Adding caught (crew and customers)+ released for total caught
 ```{r}
 CPFV_pelagic_subset<-CPFV_pelagic_subset %>% 
   mutate(total_caught= n_kept + n_released)
