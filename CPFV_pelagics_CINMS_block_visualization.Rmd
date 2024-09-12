@@ -35,6 +35,7 @@ library(transformr)
 library(maps)
 library(rnaturalearthdata)
 library(rnaturalearth)
+library(tidyquant)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
 path_plot="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS"
 ```
@@ -129,177 +130,70 @@ CINMS_shpfile_blocks<- CINMS_surrounding_fishing_blocks%>% subset(BLOCK10_ID==74
 ##Removing billfish, baitfish, opah, and sharks
 ```{r}
 ##removing species
-CPFV_pelagics_allblocks_rm<-subset(CPFV_pelagics_allblocks, CPFV_pelagics_allblocks$species_type != "Opah"& CPFV_pelagics_allblocks$species_type != "Shark"& CPFV_pelagics_allblocks$species_type != "Baitfish"& CPFV_pelagics_allblocks$species_type != "Billfish")
+CPFV_pelagics_allblocks_rm<-subset(CPFV_pelagics_allblocks, CPFV_pelagics_allblocks$species_type != "Opah"& CPFV_pelagics_allblocks$species_type != "Shark"& CPFV_pelagics_allblocks$species_type != "Baitfish"& CPFV_pelagics_allblocks$species_type != "Billfish"& CPFV_pelagics_allblocks$species_type != "Mackerel")
 ```
 
-##Aggregating by year/CPUE 
+
+## Agg CPUE_p by type and year
 ```{r}
-CINMS_sum_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
-CINMS_sum_years<-rename(CINMS_sum_years, "total_catch"= "x")
-CINMS_count_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=length)
-CINMS_count_years<-rename(CINMS_count_years, "number_of_trips"= "x")
-
-pelagicsCINMS_year_rm<-CINMS_sum_years%>% left_join(CINMS_count_years, by= "year", relationship= "one-to-one", na_matches = "never")
-pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
-  mutate(CPUE= total_catch/number_of_trips)
+CINMS_sum_years_individ<-CPFV_pelagics_allblocks_rm %>%
+  group_by(year, species_type)%>%
+  summarise(average_cpue_p= mean(CPUE_p), 
+            std_cpue_p= sd(CPUE_p, na.rm=F), 
+            min_cpue_p= min(CPUE_p), 
+            max_cpue_p= max(CPUE_p), 
+            n_cpue_p= length(CPUE_p), 
+            se_cpue_p= std_cpue_p/sqrt(n_cpue_p))
+  ## Nas in dataframe are because you can't calulcate SE or STD from one observation
+CINMS_sum_years_individ<-CINMS_sum_years_individ %>% 
+    mutate(CPUE_pos_se=average_cpue_p+se_cpue_p, 
+           CPUE_neg_se=average_cpue_p-se_cpue_p) 
 ```
 
-##Aggregating by year and block/CPUE
+## Agg CPUE_p by year
 ```{r}
-##aggregating by block and year
-CINMS_sum_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
-CINMS_sum_year_block<-rename(CINMS_sum_year_block, "total_catch"= "x")
-CINMS_sum_year_block<- replace(CINMS_sum_year_block, is.na(CINMS_sum_year_block), 0)
-
-CINMS_count_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=length)
-CINMS_count_year_block<-rename(CINMS_count_year_block, "number_of_trips"= "x")
-CINMS_count_year_block<- replace(CINMS_count_year_block, is.na(CINMS_count_year_block), 0)
-
-pelagicsCINMS_year_block_rm<-CINMS_sum_year_block%>% left_join(CINMS_count_year_block, by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
-
-pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
-  mutate(CPUE= total_catch/number_of_trips)
+CINMS_years_CPUE<-CPFV_pelagics_allblocks_rm %>%
+  group_by(year)%>%
+  summarise(average_cpue_p= mean(CPUE_p), 
+            std_cpue_p= sd(CPUE_p, na.rm=F), 
+            min_cpue_p= min(CPUE_p), 
+            max_cpue_p= max(CPUE_p), 
+            n_cpue_p= length(CPUE_p), 
+            se_cpue_p= std_cpue_p/sqrt(n_cpue_p))
+  ## Nas in dataframe are because you can't calulcate SE or STD from one observation
+CINMS_years_CPUE<-CINMS_years_CPUE %>% 
+    mutate(CPUE_pos_se=average_cpue_p+se_cpue_p, 
+           CPUE_neg_se=average_cpue_p-se_cpue_p) 
 ```
-
-##Aggregating by species, year, block
-```{r}
-CINMS_sum_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
-CINMS_sum_species_year_block<-rename(CINMS_sum_species_year_block, "total_catch"= "x")
-CINMS_sum_species_year_block$year<-as.character(CINMS_sum_species_year_block$year)
-
-CINMS_count_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=length)
-CINMS_count_species_year_block<-rename(CINMS_count_species_year_block, "number_of_trips"= "x")
-CINMS_count_species_year_block$year<-as.character(CINMS_count_species_year_block$year)
-
-pelagicsCINMS_species_year_block_rm<-CINMS_sum_species_year_block%>% left_join(CINMS_count_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
-
-pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
-  mutate(CPUE= total_catch/number_of_trips)
-```
-
-##Aggregating by species type, year/CPUE
-```{r}
-CINMS_sum_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
-CINMS_sum_year_species<-rename(CINMS_sum_year_species, "total_catch"= "x")
-
-CINMS_count_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=length)
-CINMS_count_year_species<-rename(CINMS_count_year_species, "number_of_trips"= "x")
-
-pelagicsCINMS_species_year_type_rm<-CINMS_sum_year_species%>% left_join(CINMS_count_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
-
-pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
-  mutate(CPUE= total_catch/number_of_trips)
-```
-
 
 #_______________
 #Graphing
-##Bar graph- species type, year
-Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
-MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
+##Line Graph by Species Group
+###PDO color coded--All non-neutral PDO
 ```{r}
-pelagicsCINMS_species_year_rm$year<-as.numeric(pelagicsCINMS_species_year_rm$year)
-ggplot(pelagicsCINMS_species_year_rm, aes(year, total, fill=species_type))+ 
-  geom_col()+
-  theme_bw()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
-  theme(legend.position="top")+
-  theme(legend.title=element_blank())+
-  xlab("Year")+
-  ylab("Total Caught")+
-  scale_x_continuous(breaks=seq(1980,2020,1))+
-  theme(legend.text=element_text(size=7))+
-  #adding lines for mpa designation years
-  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_year_rm, colour="black", size=1)+
-  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_year_rm, colour="black", size=1)+
-  #adding MHW events 
-  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 2006), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
-  geom_vline(aes(xintercept = 1995), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
-  #adding lines where ENSO over 1.5 
-  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .2)+
-   #adding shading where PDO is over 1 
-  geom_vline(aes(xintercept = 1983), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1993), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
-  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
-  labs(title = str_wrap("CPFV catch overtime in CINMS CDFW fishing blocks", 70))+
-   theme(plot.title = element_text(hjust = 0.5))
-
-ggsave("CINMS_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
-
-```
-
-##Line Plot- species type, year
-
-####PDO color coded-- +1/-1
-```{r}
-##Facet wrapped 
-pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
-pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+CPFV_pelagics_allblocks_rm$year<-as.numeric(CPFV_pelagics_allblocks_rm$year)
+CINMS_sum_years_individ$year<-as.numeric(CINMS_sum_years_individ$year)
+#CPFV_pelagics_allblocks_rm$year<-as.numeric(CPFV_pelagics_allblocks_rm$year)
 designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
 
-ggplot()+ 
-  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
+##Facet wrapped 
+ggplot(data= CINMS_sum_years_individ, aes(x=year, y=average_cpue_p))+ 
+  geom_line(size=1)+
+  #geom_errorbar(aes(ymin=CPUE_neg_se, ymax=CPUE_pos_se))+ ## this gives you SE bars for each year, looks a little messy in terms of visualization 
+  geom_smooth(span=.3, color="darkorange", size= 0.75, fill="green", alpha= 0.2)+
   facet_wrap(~species_type)+
   theme_classic()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
   xlab("Years")+
   scale_x_continuous(breaks=seq(1980,2020,5))+
-  theme(legend.text=element_text(size=7))+
-  theme(strip.text.x = element_text(size = 15))+
-  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
-           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
-  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
-             mapping= aes(xintercept=year),color="gray41", size=1)+
-  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
-             mapping= aes(xintercept=year),color="gray41", size=1)+
-   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
-        alpha = .1)+
-   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
-        alpha = .1)+
-   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
-        alpha = .1)+
-   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
-        alpha = .1)+
-   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .1)+
-   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
-        alpha = .1)
-
-ggsave("CINMS_line_pelagic_strong_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
-```
-###PDO color coded-- All non-neutral PDO
-```{r}
-##Facet wrapped 
-pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
-pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
-designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
-
-ggplot()+ 
-  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE),size=1, color= "black")+
-  facet_wrap(~species_type)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
-  theme(legend.position="top")+
-  theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
-  xlab("Years")+
-  scale_x_continuous(breaks=seq(1980,2020,5))+
-  theme(legend.text=element_text(size=7))+
-  theme(strip.text.x = element_text(size = 15))+
+  theme(legend.text=element_text(size=7),
+        strip.text.x = element_text(size = 16), 
+        axis.title = element_text(size = 16), 
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
   geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
            mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
   geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
@@ -332,26 +226,77 @@ ggplot()+
         alpha = .1)+
   annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
         alpha = .1)
-ggsave("CINMS_line_pelagic_all_pdo.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+ggsave("CINMS_line_pelagic_all_pdo_geom_smooth_auto_0.3span.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+###PDO color coded-- +1/-1
+```{r}
+CPFV_pelagics_allblocks_rm$year<-as.numeric(CPFV_pelagics_allblocks_rm$year)
+CINMS_sum_years_individ$year<-as.numeric(CINMS_sum_years_individ$year)
+#CPFV_pelagics_allblocks_rm$year<-as.numeric(CPFV_pelagics_allblocks_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+##Facet wrapped 
+ggplot(data= CINMS_sum_years_individ, aes(x=year, y=average_cpue_p))+ 
+  geom_line(size=1)+
+  #geom_errorbar(aes(ymin=CPUE_neg_se, ymax=CPUE_pos_se))+ ## this gives you SE bars for each year, looks a little messy in terms of visualization 
+  geom_smooth(span=.3, color="darkorange", size= 0.75, fill="green", alpha= 0.2)+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+    theme(legend.text=element_text(size=7),
+        strip.text.x = element_text(size = 16), 
+        axis.title = element_text(size = 16), 
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+
+ggsave("CINMS_line_pelagic_strong_pdo_geom_smooth_auto_0.3span.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
 ```
 
 
 ##Line Plot- All catch, year, gas, map
 Couldn't get the dimesions to graph correctly on the 3 level stacked graph, so making the location graph seperately and then joining outside of R 
+
 ###Stacked Line Graph and gas prices 
 ```{r}
-pelagicsCINMS_year_rm$year<-as.numeric(as.character(pelagicsCINMS_year_rm$year))
-plot1<- ggplot()+ 
-  geom_line(data=pelagicsCINMS_year_rm, aes(x=year, y=CPUE),size=1, color= "black")+
+plot1<- ggplot(data=CINMS_years_CPUE, aes(x=year, y=average_cpue_p))+ 
+   geom_line(size=1)+
+  #geom_errorbar(aes(ymin=CPUE_neg_se, ymax=CPUE_pos_se))+ ## this gives you SE bars for each year, looks a little messy in terms of visualization 
+  geom_smooth(span=.3, color="darkorange", size= 1, fill="green", alpha= 0.2)+
   theme_classic()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
   xlab("Years")+
   scale_x_continuous(breaks=seq(1980,2020,5))+
-  theme(legend.text=element_text(size=7))+
-  theme(strip.text.x = element_text(size = 15))+
+    theme(legend.text=element_text(size=12),
+        strip.text.x = element_text(size = 12), 
+        axis.title = element_text(size = 12), 
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
   geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
            mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
   geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
@@ -387,27 +332,30 @@ plot1<- ggplot()+
 plot1
 
 plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
-  geom_line(size=1)+
-  theme_bw()+
+  geom_line(size=1, color= "darkblue")+
+  theme_classic()+
   theme(plot.margin = unit(c(5,5,5,5), 'points'))+
   scale_x_continuous(breaks=seq(1980,2020,1))+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
    scale_x_continuous(breaks=seq(1980,2020,10))+
-  theme(legend.text=element_text(size=7))+
+  theme(legend.text=element_text(size=12),
+        strip.text.x = element_text(size = 12), 
+        axis.title = element_text(size = 12), 
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
   theme(strip.text.x = element_text(size = 15))+
   labs(y = paste0("Inflation Adjusted Gas Price ($/gallon)"))+
   xlab("Year")
 plot2
 plotstacked<-ggarrange(plot1, plot2, nrow=2)
 plotstacked
-ggsave("CINMS_stacked_gas_all.jpeg", plot= plotstacked, width = 7, height = 8, units="in", path = path_plot)
+ggsave("CINMS_stacked_gas_all_CPUEp.jpeg", plot= plotstacked, width = 7, height = 8, units="in", path = path_plot)
 ```
-
 ###Location Map
 ```{r}
 plot3<-ggplot()+ 
-  geom_sf(data=CINMS_surrounding_fishing_blocks, fill="lightblue" )+
-  geom_sf(data=CINMS_shpfile_blocks, fill= "darkblue", alpha=0.25, color="black")+
+  geom_sf(data=CINMS_surrounding_fishing_blocks, fill="grey90" )+
+  geom_sf(data=CINMS_shpfile_blocks, fill= "blue", alpha=0.25, color="black")+
    geom_sf(data=CINMS_state_MPA, color="black", fill= NA, alpha=0.25)+
    geom_sf(data=CINMS_fed_MPA, color="black", fill=NA, alpha= 0.25)+
    geom_sf(data=CINMS, fill= NA)+
@@ -443,10 +391,10 @@ CINMS_fishing_blocks_pelagic<-CINMS_fishing_blocks_pelagic %>%
 ```
 
 
-#Independent scale/CPUE
+#Independent scale/CPUE_t
 ###Path
 ```{r}
-path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year/independent_scale"
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year/independent_scale/CPUE_t"
 
 ```
 
@@ -715,4 +663,485 @@ for(i in unique(CINMS_fishing_blocks_pelagic_2007$year)){
   
   ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_proportion_same_scale_", i, ".png") )
 }
+```
+
+
+
+#___________________________________
+#Unused code 
+
+Below is the way that I did previously before I calculated CPUE_t for each individual trip. Previously, I calculated CPUE by taking the average of catch and people per year-- this prevents the ability to run stats on means because it treats all measurements as a single sample. 
+
+Agg by year- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_years<-aggregate(CPFV_pelagics_allblocks_rm$, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_years<-rename(CINMS_sum_years, "totalcatch"= "x")
+CINMS_count_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_years<-rename(CINMS_count_years, "number_of_trips"= "x")
+CINMS_sum_people_years<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_people_years<-rename(CINMS_sum_people_years, "number_of_fishers"= "x")
+
+pelagicsCINMS_caught_years<-CINMS_sum_years%>% left_join(CINMS_count_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicsCINMS_year_rm<-pelagicsCINMS_caught_years%>% left_join(CINMS_sum_people_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg by year & block- CPUE_t & CPUE_p
+```{r}
+##aggregating by block and year
+CINMS_sum_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_year_block<-rename(CINMS_sum_year_block, "total_catch"= "x")
+CINMS_sum_year_block<- replace(CINMS_sum_year_block, is.na(CINMS_sum_year_block), 0)
+
+CINMS_count_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_year_block<-rename(CINMS_count_year_block, "number_of_trips"= "x")
+CINMS_count_year_block<- replace(CINMS_count_year_block, is.na(CINMS_count_year_block), 0)
+
+CINMS_sum_people_year_block<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_people_year_block<-rename(CINMS_sum_people_year_block, "number_of_fishers"= "x")
+
+pelagicsCINMS_year_block_caught<-CINMS_sum_year_block%>% left_join(CINMS_count_year_block, by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_year_block_rm<- pelagicsCINMS_year_block_caught%>% left_join(CINMS_sum_people_year_block,by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg species, year, block- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_species_year_block<-rename(CINMS_sum_species_year_block, "total_catch"= "x")
+CINMS_sum_species_year_block$year<-as.character(CINMS_sum_species_year_block$year)
+
+CINMS_count_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_species_year_block<-rename(CINMS_count_species_year_block, "number_of_trips"= "x")
+CINMS_count_species_year_block$year<-as.character(CINMS_count_species_year_block$year)
+
+CINMS_sum_people_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_people_species_year_block<-rename(CINMS_sum_people_species_year_block, "number_of_fishers"= "x")
+CINMS_sum_people_species_year_block$year<-as.character(CINMS_sum_people_species_year_block$year)
+
+pelagicsCINMS_species_year_block_caught<-CINMS_sum_species_year_block%>% left_join(CINMS_count_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_caught %>% left_join(CINMS_sum_people_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg by species type & year- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_year_species<-rename(CINMS_sum_year_species, "total_catch"= "x")
+
+CINMS_count_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_year_species<-rename(CINMS_count_year_species, "number_of_trips"= "x")
+
+CINMS_sum_people_year_species<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, species_type=CPFV_pelagics_allblocks_rm$species_type), FUN=sum)
+CINMS_sum_people_year_species<-rename(CINMS_sum_people_year_species, "number_of_fishers"= "x")
+
+pelagicsCINMS_species_year_type_caught<-CINMS_sum_year_species%>% left_join(CINMS_count_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_caught %>% left_join(CINMS_sum_people_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+
+
+Below is the way that I did previously before I calculated CPUE_t for each individual trip. Previously, I calculated CPUE by taking the average of catch and people per year-- this prevents the ability to run stats on means because it treats all measurements as a single sample. 
+
+Agg by year- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_years<-aggregate(CPFV_pelagics_allblocks_rm$, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_years<-rename(CINMS_sum_years, "totalcatch"= "x")
+CINMS_count_years<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_years<-rename(CINMS_count_years, "number_of_trips"= "x")
+CINMS_sum_people_years<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_people_years<-rename(CINMS_sum_people_years, "number_of_fishers"= "x")
+
+pelagicsCINMS_caught_years<-CINMS_sum_years%>% left_join(CINMS_count_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicsCINMS_year_rm<-pelagicsCINMS_caught_years%>% left_join(CINMS_sum_people_years, by= "year", relationship= "one-to-one", na_matches = "never")
+pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_year_rm<-pelagicsCINMS_year_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg by year & block- CPUE_t & CPUE_p
+```{r}
+##aggregating by block and year
+CINMS_sum_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_year_block<-rename(CINMS_sum_year_block, "total_catch"= "x")
+CINMS_sum_year_block<- replace(CINMS_sum_year_block, is.na(CINMS_sum_year_block), 0)
+
+CINMS_count_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_year_block<-rename(CINMS_count_year_block, "number_of_trips"= "x")
+CINMS_count_year_block<- replace(CINMS_count_year_block, is.na(CINMS_count_year_block), 0)
+
+CINMS_sum_people_year_block<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, block_id=CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_people_year_block<-rename(CINMS_sum_people_year_block, "number_of_fishers"= "x")
+
+pelagicsCINMS_year_block_caught<-CINMS_sum_year_block%>% left_join(CINMS_count_year_block, by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_year_block_rm<- pelagicsCINMS_year_block_caught%>% left_join(CINMS_sum_people_year_block,by= c("year", "block_id"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_year_block_rm<-pelagicsCINMS_year_block_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg species, year, block- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_species_year_block<-rename(CINMS_sum_species_year_block, "total_catch"= "x")
+CINMS_sum_species_year_block$year<-as.character(CINMS_sum_species_year_block$year)
+
+CINMS_count_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=length)
+CINMS_count_species_year_block<-rename(CINMS_count_species_year_block, "number_of_trips"= "x")
+CINMS_count_species_year_block$year<-as.character(CINMS_count_species_year_block$year)
+
+CINMS_sum_people_species_year_block<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, species=CPFV_pelagics_allblocks_rm$species_name, species_type=CPFV_pelagics_allblocks_rm$species_type, block_id= CPFV_pelagics_allblocks_rm$block_id), FUN=sum)
+CINMS_sum_people_species_year_block<-rename(CINMS_sum_people_species_year_block, "number_of_fishers"= "x")
+CINMS_sum_people_species_year_block$year<-as.character(CINMS_sum_people_species_year_block$year)
+
+pelagicsCINMS_species_year_block_caught<-CINMS_sum_species_year_block%>% left_join(CINMS_count_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_caught %>% left_join(CINMS_sum_people_species_year_block, by= c("year", "block_id", "species", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_species_year_block_rm<-pelagicsCINMS_species_year_block_rm %>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Agg by species type & year- CPUE_t & CPUE_p
+```{r}
+CINMS_sum_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=sum)
+CINMS_sum_year_species<-rename(CINMS_sum_year_species, "total_catch"= "x")
+
+CINMS_count_year_species<-aggregate(CPFV_pelagics_allblocks_rm$total_caught, by=list(species_type=CPFV_pelagics_allblocks_rm$species_type, year=CPFV_pelagics_allblocks_rm$year), FUN=length)
+CINMS_count_year_species<-rename(CINMS_count_year_species, "number_of_trips"= "x")
+
+CINMS_sum_people_year_species<-aggregate(CPFV_pelagics_allblocks_rm$n_fishers, by=list(year=CPFV_pelagics_allblocks_rm$year, species_type=CPFV_pelagics_allblocks_rm$species_type), FUN=sum)
+CINMS_sum_people_year_species<-rename(CINMS_sum_people_year_species, "number_of_fishers"= "x")
+
+pelagicsCINMS_species_year_type_caught<-CINMS_sum_year_species%>% left_join(CINMS_count_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_caught %>% left_join(CINMS_sum_people_year_species, by= c("year", "species_type"), relationship = "one-to-one", na_matches = "never")
+
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
+  mutate(CPUE_t= total_catch/number_of_trips)
+pelagicsCINMS_species_year_type_rm<-pelagicsCINMS_species_year_type_rm%>%
+  mutate(CPUE_p= total_catch/number_of_fishers)
+```
+
+Graphing
+Bar graph- species type, year
+Years with PDO over +1 are 1983, 1986, 1987, 1993, 1997
+MHWs with an average intensity over 2 STEVs were in 2015, 2006, and 1995
+```{r}
+pelagicsCINMS_species_year_rm$year<-as.numeric(pelagicsCINMS_species_year_rm$year)
+ggplot(pelagicsCINMS_species_year_rm, aes(year, total, fill=species_type))+ 
+  geom_col()+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  xlab("Year")+
+  ylab("Total Caught")+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(legend.text=element_text(size=7))+
+  #adding lines for mpa designation years
+  geom_vline(aes(xintercept = 2004), pelagicsCINMS_species_year_rm, colour="black", size=1)+
+  geom_vline(aes(xintercept = 2007), pelagicsCINMS_species_year_rm, colour="black", size=1)+
+  #adding MHW events 
+  geom_vline(aes(xintercept = 2015), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 2006), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  geom_vline(aes(xintercept = 1995), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=2)+
+  #adding lines where ENSO over 1.5 
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1986, xmax = 1987, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1991, xmax = 1993, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+  annotate("rect", xmin = 2015, xmax = 2016, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .2)+
+   #adding shading where PDO is over 1 
+  geom_vline(aes(xintercept = 1983), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1986), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1993), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  geom_vline(aes(xintercept = 1997), pelagicsCINMS_species_year_rm, colour="black", size=0.75, linetype=3)+
+  labs(title = str_wrap("CPFV catch overtime in CINMS CDFW fishing blocks", 70))+
+   theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("CINMS_bar_pelagic.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+
+```
+
+Line Plot- species type, year
+
+CPUE_t_aggregate; PDO color coded-- +1/-1
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE_t),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+
+ggsave("CINMS_line_pelagic_strong_pdo_CPUEt.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+CPUE_t_aggregate; PDO color coded-- All non-neutral PDO
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE_t),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1980, xmax = 1982, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1983, xmax = 1985, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1992, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1995, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 2003, xmax = 2004, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 2014, xmax = 2017, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1989, xmax = 1992, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1994, xmax = 1995, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1998, xmax = 2003, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2004, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+ggsave("CINMS_line_pelagic_all_pdo_CPUEt.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
+CPUE_p_aggregate; PDO color coded-- +1/-1
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE_p),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1983, xmax = 1984, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1993, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1997, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1999, xmax = 2002, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+   annotate("rect", xmin = 2008, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+
+ggsave("CINMS_line_pelagic_strong_pdo_CPUEp.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
+CPUE_p_aggregate; PDO color coded-- All non-neutral PDO
+```{r}
+##Facet wrapped 
+pelagicsCINMS_species_year_type_rm$year<-as.character(pelagicsCINMS_species_year_type_rm$year)
+pelagicsCINMS_species_year_type_rm$year<-as.numeric(pelagicsCINMS_species_year_type_rm$year)
+designation_MHW_ENSO_years$year<-as.numeric(designation_MHW_ENSO_years$year)
+
+ggplot()+ 
+  geom_line(data=pelagicsCINMS_species_year_type_rm, aes(x=year, y=CPUE_p),size=1, color= "black")+
+  facet_wrap(~species_type)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1980, xmax = 1982, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1983, xmax = 1985, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1992, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1995, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 2003, xmax = 2004, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 2014, xmax = 2017, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1989, xmax = 1992, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1994, xmax = 1995, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1998, xmax = 2003, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2004, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+ggsave("CINMS_line_pelagic_all_pdo_CPUEp.jpeg", width= 30, height= 20, units= "cm", path = path_plot)
+```
+
+
+Stacked line plots
+CPUE_t_aggregate; Stacked Line Graph and gas prices 
+```{r}
+pelagicsCINMS_year_rm$year<-as.numeric(as.character(pelagicsCINMS_year_rm$year))
+plot1<- ggplot()+ 
+  geom_line(data=pelagicsCINMS_year_rm, aes(x=year, y=CPUE_t),size=1, color= "black")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+  theme(legend.position="top")+
+  theme(legend.title=element_blank())+
+  ylab("Catch per Unit Effort (fish caught per trip)")+
+  xlab("Years")+
+  scale_x_continuous(breaks=seq(1980,2020,5))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="MHW"|Event== "ENSO"), 
+           mapping= aes(xintercept=year), color="gray61",  linetype="dotted", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="Federal_MPA_Designation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+  geom_vline(data=subset(designation_MHW_ENSO_years, Event=="State_MPA_Desingation"), 
+             mapping= aes(xintercept=year),color="gray41", size=1)+
+   annotate("rect", xmin = 1980, xmax = 1982, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1983, xmax = 1985, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1986, xmax = 1988, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1992, xmax = 1994, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 1995, xmax = 1998, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+   annotate("rect", xmin = 2003, xmax = 2004, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 2014, xmax = 2017, ymin = -Inf, ymax = Inf, fill= "red",
+        alpha = .1)+
+  annotate("rect", xmin = 1982, xmax = 1983, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1989, xmax = 1992, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1994, xmax = 1995, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 1998, xmax = 2003, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2004, xmax = 2014, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)+
+  annotate("rect", xmin = 2018, xmax = 2020, ymin = -Inf, ymax = Inf, fill= "blue",
+        alpha = .1)
+plot1
+
+plot2<-ggplot(gas_adjusted2020, aes(Year, adjust_price))+
+  geom_line(size=1)+
+  theme_bw()+
+  theme(plot.margin = unit(c(5,5,5,5), 'points'))+
+  scale_x_continuous(breaks=seq(1980,2020,1))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
+   scale_x_continuous(breaks=seq(1980,2020,10))+
+  theme(legend.text=element_text(size=7))+
+  theme(strip.text.x = element_text(size = 15))+
+  labs(y = paste0("Inflation Adjusted Gas Price ($/gallon)"))+
+  xlab("Year")
+plot2
+plotstacked<-ggarrange(plot1, plot2, nrow=2)
+plotstacked
+ggsave("CINMS_stacked_gas_all_CPUEt.jpeg", plot= plotstacked, width = 7, height = 8, units="in", path = path_plot)
 ```

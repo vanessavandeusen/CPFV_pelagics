@@ -400,6 +400,7 @@ saveRDS(data_clean, file.path(path_out, "CDFW_1980_2020_cpfv_logbook_data.Rds"))
 
 #------
 #Subset for Pelagics 
+
 Pelagic species: From Kacy CCA response notes-- "Condition report definition for coastal pelagic and HMF: California barracuda, Pacific bonito, white sea bass, yellowtail, albacore, blue shark, jack mackerel, northern, anchovy, opah, Pacific mackerel, Pacific northern bluefin tuna, Pacific sardine, shortfin mako shark, skipjack tuna, striped marlin, swordfish, thresher shark, white shark, and yellowfin tuna. "
 
    swordfish,  white shark, and  
@@ -409,8 +410,8 @@ Barracuda, California; Bonito, Pacific; Anchovy, northern; **dolphin (fish)**; M
 swordfish is not within subset of data 
 ###Selecting pelagics species 
 ```{r}
-unique(CPFV_data$species_name)
-CPFV_pelagic_subset<-CPFV_data%>% subset(comm_name_orig=="Barracuda, California"|
+unique(data_clean$species_name)
+CPFV_pelagic_subset<-data_clean%>% subset(comm_name_orig=="Barracuda, California"|
                                               comm_name_orig=="Bonito, Pacific"|
                                               comm_name_orig=="Anchovy, northern"|
                                               comm_name_orig=="dolphin (fish)"|
@@ -448,9 +449,9 @@ CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Tuna, albaco
                              CPFV_pelagic_subset$species_name=="Tuna, skipjack, black"|
                              CPFV_pelagic_subset$species_name=="Tuna, unspecified"|
                              CPFV_pelagic_subset$species_name=="Tuna, yellowfin"] <-"Tuna"
-#CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Mackerel, jack"|
-                             #CPFV_pelagic_subset$species_name=="Mackerel, Pacific"|
-                             #CPFV_pelagic_subset$species_name=="Mackerel, unspecified" ] <- "Mackerel"
+CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Mackerel, jack"|
+                             CPFV_pelagic_subset$species_name=="Mackerel, Pacific"|
+                             CPFV_pelagic_subset$species_name=="Mackerel, unspecified" ] <- "Mackerel"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Marlin, striped"|
                              CPFV_pelagic_subset$species_name=="Swordfish"] <- "Billfish"
 CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Anchovy, northern"|
@@ -465,8 +466,21 @@ CPFV_pelagic_subset$species_type[CPFV_pelagic_subset$species_name=="Yellowtail"]
 ```{r}
 CPFV_pelagic_subset<-CPFV_pelagic_subset %>% 
   mutate(total_caught= n_kept + n_released)
-
+CPFV_pelagic_subset$total_caught<-abs(CPFV_pelagic_subset$total_caught)
 ```
+
+##Removing rows where n_fishers= 0 | n=fishers=Na
+```{r}
+CPFV_pelagic_subset<- CPFV_pelagic_subset %>% drop_na("n_fishers")
+CPFV_pelagic_subset<-subset(CPFV_pelagic_subset, CPFV_pelagic_subset$n_fishers != 0)
+```
+
+##Adding CPUE_p 
+```{r}
+CPFV_pelagic_subset<-CPFV_pelagic_subset %>% 
+  mutate(CPUE_p= total_caught/n_fishers)
+```
+
 
 ##Save dataframe
 ```{r}
