@@ -59,6 +59,8 @@ gas_adjusted2020<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects
 ##Subsetting by Southern California blocks
 Southern California for these purposes is all fishing blocks between Point Conception and Mexico
 ```{r}
+#### somewhere here we are losing block 695, is present in CPFV_pelagics but not after this step. Needs to be included in analysis 
+CPFV_pelagics$block_id<-as.numeric(as.character(CPFV_pelagics$block_id))
 CPFV_pelagics_socal<- CPFV_pelagics%>% subset(block_id>=651 & block_id<=903)
 CPFV_pelagics_socal$year<-as.factor(CPFV_pelagics_socal$year)
 ```
@@ -101,6 +103,24 @@ SoCal_years_CPUE<-SoCal_years_CPUE %>%
            CPUE_neg_se=average_cpue_p-se_cpue_p) 
 ```
 
+##Agg CPUE_p by year and block 
+```{r}
+SoCal_year_block_CPUE<-CPFV_pelagics_socal_rm %>%
+  group_by(year, block_id)%>%
+  summarise(average_cpue_p= mean(CPUE_p), 
+            total_caught=sum(total_caught))
+```
+
+##Agg redact boats by year and block
+```{r}
+SoCal_year_block_boat<-CPFV_pelagics_socal_rm %>%
+  group_by(year, block_id)%>%
+  summarise(unique_vessels= n_distinct(id_vessel))
+SoCal_year_block_boat_redact<- SoCal_year_block_boat %>% subset(unique_vessels<4)
+SoCal_year_block_boat_redact<-subset(SoCal_year_block_boat_redact, select= -unique_vessels)
+SoCal_year_block_boat_redact$redact<-"Y"
+```
+
 
 ##Subsetting MPA Shapefiles by Year
 2003, 2005, 2007, 2012
@@ -132,7 +152,7 @@ ggplot(data= SoCal_sum_years_individ, aes(x=year, y=average_cpue_p))+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
   xlab("Years")+
   #scale_x_continuous(breaks=seq(1980,2020,5))+
   theme(legend.text=element_text(size=7),
@@ -179,7 +199,7 @@ ggplot(data= SoCal_sum_years_individ, aes(x=year, y=average_cpue_p))+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
   xlab("Years")+
   #scale_x_continuous(breaks=seq(1980,2020,5))+
   theme(legend.text=element_text(size=7),
@@ -239,7 +259,7 @@ plot1<-ggplot(data= SoCal_years_CPUE, aes(x=year, y=average_cpue_p))+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+
   theme(legend.position="top")+
   theme(legend.title=element_blank())+
-  ylab("Catch per Unit Effort (fish caught per trip)")+
+  ylab("Catch per Unit Effort (fish caught per fisher)")+
   xlab("Years")+
   #scale_x_continuous(breaks=seq(1980,2020,5))+
   theme(legend.text=element_text(size=12),
@@ -326,7 +346,7 @@ ggsave("SoCal_location_map.jpeg", plot= plot3, width = 5, units="in", path = pat
 ###Joining shapefile + data
 ```{r}
 ##putting in Zeros where there isn't data about fishing blocks
-complete_pelagicssocal_year_block_rm<-tidyr::complete(pelagicssocal_year_block_rm, block_id, year, fill=list(total=0))
+complete_pelagicssocal_year_block_rm<-tidyr::complete(ungroup(SoCal_year_block_CPUE), block_id, year, fill=list(average_cpue_p=0, total_caught=0))
 
 ##joining shapefile and data
 SoCal_fishing_blocks<-select(SoCal_fishing_blocks, -c(total))
@@ -338,33 +358,56 @@ SoCal_fishing_blocks_pelagic<- replace(SoCal_fishing_blocks_pelagic, is.na(SoCal
 
 ##Calculating Proportional catch (total/max ever)
 SoCal_fishing_blocks_pelagic<-SoCal_fishing_blocks_pelagic %>%
-  mutate(proportional_catch= total_catch/254143)
+  mutate(proportional_catch= total_caught/254143)
 
+```
+###Joining shapefile + redaction
+```{r}
+##joining data and redaction
+complete_pelagicssocal_year_block_rm$year<-as.character(complete_pelagicssocal_year_block_rm$year)
+SoCal_year_block_boat_redact$year<-as.character(SoCal_year_block_boat_redact$year)
+complete_pelagicssocal_year_block_rm_redact<-left_join(complete_pelagicssocal_year_block_rm,
+                                          SoCal_year_block_boat_redact,  
+                                          by= c("block_id","year"), 
+                                          relationship= "many-to-many", 
+                                          na_matches= "never")
+complete_pelagicssocal_year_block_rm_redact$year<-as.character(complete_pelagicssocal_year_block_rm_redact$year) 
+complete_pelagicssocal_year_block_rm_redact$redact[is.na(complete_pelagicssocal_year_block_rm_redact$redact)]<-"N"
+complete_pelagicssocal_year_block_rm_redact$total_caught[complete_pelagicssocal_year_block_rm_redact$redact=="Y"]<-NA
+complete_pelagicssocal_year_block_rm_redact$average_cpue_p[complete_pelagicssocal_year_block_rm_redact$redact=="Y"]<-NA
+
+##joining shapefile and data
+SoCal_redaction_blocks_pelagic<-left_join(SoCal_fishing_blocks,complete_pelagicssocal_year_block_rm_redact,  by= "block_id", relationship= "many-to-many", na_matches= "never")
+SoCal_redaction_blocks_pelagic$year<-as.character(SoCal_redaction_blocks_pelagic$year)
 ```
 
 
 ##Independent scale/CPUE
 ###Path
 ```{r}
-path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year/independent_scale"
-
+#path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year/independent_scale/CPUE_fish_per_person_no_redact"
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/SoCal/SoCal_heatmaps_by_year/independent_scale/CPUE_fish_per_person_redact"
 ```
 
 ###"For loop" graphing
 ###MPA designaton status 1980-2002
 ```{r}
 ##Subsetting so can add MPAs as designated
-SoCal_fishing_blocks_pelagic$year<-as.character(as.factor(SoCal_fishing_blocks_pelagic$year))
-SoCal_fishing_blocks_pelagic_pre<- subset(SoCal_fishing_blocks_pelagic, year<=2002)
+#without redaction
+##SoCal_fishing_blocks_pelagic$year<-as.character(as.factor(SoCal_fishing_blocks_pelagic$year))
+##SoCal_fishing_blocks_pelagic_pre<- subset(SoCal_fishing_blocks_pelagic, year<=2002)
+#with redaction
+SoCal_redaction_blocks_pelagic$year<-as.character(as.factor(SoCal_redaction_blocks_pelagic$year))
+SoCal_fishing_blocks_pelagic_pre<- subset(SoCal_redaction_blocks_pelagic, year<=2002)
 
 ##Graphing and saving
 for(i in unique(SoCal_fishing_blocks_pelagic_pre$year)){
   x<-ggplot()+
     geom_sf(data=SoCal_fishing_blocks, fill="white")+
-    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_pre, year==i & year<=2002), aes(fill=CPUE))+
+    geom_sf(data= subset(SoCal_fishing_blocks_pelagic_pre, year==i & year<=2002), aes(fill=average_cpue_p))+
     scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 600))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 14))+
     theme_classic()+
     annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
     annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -372,28 +415,31 @@ for(i in unique(SoCal_fishing_blocks_pelagic_pre$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
     xlab("Longitude")+
     ylab("Latitude")+
-    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish caught/fishers)", 
         subtitle= paste("Year", i, sep = "-"))
 
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
 
 ###MPA designaton status 2003-2004
 ```{r}
 ##Subsetting so can add MPAs as designated
-SoCal_fishing_blocks_pelagic_2003<- subset(SoCal_fishing_blocks_pelagic, year>=2003 & year<=2004)
+#Without redaction
+#SoCal_fishing_blocks_pelagic_2003<- subset(SoCal_fishing_blocks_pelagic, year>=2003 & year<=2004)
+#With redaction
+SoCal_fishing_blocks_pelagic_2003<- subset(SoCal_redaction_blocks_pelagic, year>=2003 & year<=2004)
 
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2003$year)){
   x<- ggplot()+
     geom_sf(data=SoCal_fishing_blocks, fill="white")+
     geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2003, year==i & year>=2003 & year<=2004),
-            aes(fill=CPUE))+
+            aes(fill=average_cpue_p))+
     geom_sf(data=MPA_socal_2003, color="black", fill= "darkblue", alpha=0.25)+
     scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 600))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 14))+
     theme_classic()+
     annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
     annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -401,29 +447,31 @@ for(i in unique(SoCal_fishing_blocks_pelagic_2003$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
     xlab("Longitude")+
     ylab("Latitude")+
-    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish caught/fishers)", 
         subtitle= paste("Year", i, sep = "-"))
 
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
 ###MPA designaton status 2005-2006
 ```{r}
 ##Subsetting so can add MPAs as designated
-SoCal_fishing_blocks_pelagic_2005<- subset(SoCal_fishing_blocks_pelagic, year>=2005 & year<=2006)
+#Without redaction
+#SoCal_fishing_blocks_pelagic_2005<- subset(SoCal_fishing_blocks_pelagic, year>=2005 & year<=2006)
+#With redaction
+SoCal_fishing_blocks_pelagic_2005<- subset(SoCal_redaction_blocks_pelagic, year>=2005 & year<=2006)
 
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2005$year)){
   x<- ggplot()+
     geom_sf(data=SoCal_fishing_blocks, fill="white")+
     geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2005, year==i & year>2003 & year<2007),
-            aes(fill=CPUE))+
+            aes(fill=average_cpue_p))+
     geom_sf(data=MPA_socal_2003, color="black", fill= "darkblue", alpha=0.25)+
     geom_sf(data=MPA_socal_2005, color="black", fill= "darkblue", alpha=0.25)+
-
     scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 600))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 14))+
     theme_classic()+
     annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
     annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -431,30 +479,33 @@ for(i in unique(SoCal_fishing_blocks_pelagic_2005$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
     xlab("Longitude")+
     ylab("Latitude")+
-    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+    ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish caught/fishers)", 
         subtitle= paste("Year", i, sep = "-"))
 
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
-
 
 ### MPA designaton status 2007-2011
 ```{r}
 ##Subsetting so can add MPAs as designated
-SoCal_fishing_blocks_pelagic_2007<- subset(SoCal_fishing_blocks_pelagic, year>=2007 & year<=2011)
+#Without redaction
+#SoCal_fishing_blocks_pelagic_2007<- subset(SoCal_fishing_blocks_pelagic, year>=2007 & year<=2011)
+#With redaction
+SoCal_fishing_blocks_pelagic_2007<- subset(SoCal_redaction_blocks_pelagic, year>=2007 & year<=2011)
+
 
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2007$year)){
   x<- ggplot()+
       geom_sf(data=SoCal_fishing_blocks, fill="white")+
-      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=CPUE))+
+      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=average_cpue_p))+
       geom_sf(data=MPA_socal_2003, color="black", fill= "darkblue", alpha=0.25)+
       geom_sf(data=MPA_socal_2005, color="black", fill= "darkblue", alpha=0.25)+
       geom_sf(data=MPA_socal_2007, color="black", fill= "darkblue", alpha=0.25)+
       scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 600))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 14))+
       theme_classic()+
       annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
       annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -462,31 +513,34 @@ for(i in unique(SoCal_fishing_blocks_pelagic_2007$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
       xlab("Longitude")+
       ylab("Latitude")+
-      ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+      ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish caught/fishers)", 
         subtitle= paste("Year", i, sep = "-"))
 
   
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
 
 ### MPA designaton status 2012-2020
 ```{r}
 ##Subsetting so can add MPAs as designated
-SoCal_fishing_blocks_pelagic_2012<- subset(SoCal_fishing_blocks_pelagic, year>=2012)
+#Without redaction
+#SoCal_fishing_blocks_pelagic_2012<- subset(SoCal_fishing_blocks_pelagic, year>=2012)
+#With redaction
+SoCal_fishing_blocks_pelagic_2012<- subset(SoCal_redaction_blocks_pelagic, year>=2012)
 
 ##Graphing and printing
 for(i in unique(SoCal_fishing_blocks_pelagic_2012$year)){
   x<- ggplot()+
       geom_sf(data=SoCal_fishing_blocks, fill="white")+
-      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2012, year==i & year>=2012), aes(fill=CPUE))+
+      geom_sf(data= subset(SoCal_fishing_blocks_pelagic_2012, year==i & year>=2012), aes(fill=average_cpue_p))+
       geom_sf(data=MPA_socal_2003, color="black", fill= "darkblue", alpha=0.25)+
       geom_sf(data=MPA_socal_2005, color="black", fill= "darkblue", alpha=0.25)+
       geom_sf(data=MPA_socal_2007, color="black", fill= "darkblue", alpha=0.25)+
       geom_sf(data=MPA_socal_2012, color="black", fill= "darkblue", alpha=0.25)+
       scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Total Pelagic Catch",
-                         na.value = "grey100", limits= c(0, 600))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 14))+
       theme_classic()+
       annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.2, "cm"))+
       annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -494,11 +548,11 @@ for(i in unique(SoCal_fishing_blocks_pelagic_2012$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
       xlab("Longitude")+
       ylab("Latitude")+
-      ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish/trips)", 
+      ggtitle(label =  "Southern California CPFV Catch Per Unit Effort (fish caught/fishers)", 
         subtitle= paste("Year", i, sep = "-"))
 
   
-  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("SoCal_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
 
