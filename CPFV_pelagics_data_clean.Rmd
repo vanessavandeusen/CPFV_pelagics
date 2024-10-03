@@ -30,7 +30,9 @@ path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/D
 
 ## Importing data
 ```{r}
-cpfv_merged_no_pii<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
+#cpfv_merged_no_pii<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
+
+cpfv_merged_uniqueID<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_uniqueID.csv")
 blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/blocks.csv")
 port_DF <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_port_historic.csv")
 species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_Species_historic.csv")
@@ -38,7 +40,8 @@ species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_
 
 ## Formatting data
 ```{r}
-cpfv_merged_no_pii$SpeciesCode<-as.numeric(cpfv_merged_no_pii$SpeciesCode)
+#cpfv_merged_no_pii$SpeciesCode<-as.numeric(cpfv_merged_no_pii$SpeciesCode)
+cpfv_merged_uniqueID$SpeciesCode<-as.numeric(cpfv_merged_uniqueID$SpeciesCode)
 
 block_key <- blocks %>% 
   sf::st_drop_geometry()%>% 
@@ -63,25 +66,25 @@ species_key$species_code<-as.numeric(species_key$species_code)
 #Demographics on species, methods, and bait (dataset from 1980-2020)
 ## Which species groups are most frequently targeted by recreational fishers?
 ```{r}
-target_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(TargetSpeciesLingcod:TargetSpeciesMiscBay))))
+target_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(TargetSpeciesLingcod:TargetSpeciesMiscBay))))
 head(target_n)
 ```
 
 ## Which fishing method is most frequently used by recreational fishers?
 ```{r}
-method_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(FishingMethodTrolling:FishingMethodOther))))
+method_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(FishingMethodTrolling:FishingMethodOther))))
 head(method_n)
 ```
 ## Which bait is most frequently used by recreational fishers?
 ```{r}
-bait_n <- rev(sort(nrow(cpfv_merged_no_pii)-freeR::complete(cpfv_merged_no_pii %>% select(BaitUsedAnchoviesLive:BaitUsedOtherDead))))
+bait_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(BaitUsedAnchoviesLive:BaitUsedOtherDead))))
 head(bait_n)
 ```
 
 ##Table format
 ###Specific species 
 ```{r}
-table(cpfv_merged_no_pii$TargetSpeciesLingcod)
+table(cpfv_merged_uniqueID$TargetSpeciesLingcod)
 table(cpfv_merged_no_pii$TargetSpeciesOther)
 table(cpfv_merged_no_pii$TargetSpeciesRockfishes)
 table(cpfv_merged_no_pii$TargetSpeciesSalmon)
@@ -124,7 +127,7 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
 #-----
 #Clean data 
 ```{r}
- data_clean <- cpfv_merged_no_pii %>% 
+ data_clean <- cpfv_merged_uniqueID %>% 
   janitor::clean_names("snake") %>% 
   rename(date=log_date,
          month=log_month,         
@@ -213,7 +216,7 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
 
 data_clean<- data_clean%>%
   mutate(ID=seq.int(nrow(data_clean)))%>%
-  mutate(logbook_id_use=paste(ID, date, sep="-"))%>%
+  mutate(logbook_id_use=paste(ID, date, id_vessel, sep="-"))%>%
   select(logbook_id_use, 
          year, month, day, 
          date, date_submitted, date_received,
@@ -225,7 +228,7 @@ data_clean<- data_clean%>%
          depth_ft, temp_f, 
          departure_time, return_time, hm_fished, hrs_fished, n_fishers, n_crew_fished,
          species_code, species_name,
-         n_kept, n_released, n_lost_to_sea_lions, n_caught_by_crew,
+         n_kept, n_released, n_lost_to_sea_lions, n_caught_by_crew,id_vessel, 
          everything())
 
 ```
@@ -235,13 +238,13 @@ data_clean<- data_clean%>%
 # Build logbook id
 log_key <- data_clean %>% 
   group_by(year, date,
-           port_complex, port, port_code, 
+           port_complex, port, port_code, id_vessel,
            no_activity_month, trip_type, non_paying, 
            departure_time, return_time,
            block_id,
            depth_ft, temp_f,
            hm_fished, hrs_fished,
-           n_fishers, n_crew_fished) %>% 
+           n_fishers, n_crew_fished, logbook_id_use) %>% 
   summarize(n_kept=sum(n_kept)) %>% 
   ungroup()
 # Are the logbook ids unique? Mine should be, there's shouldn't be
@@ -249,6 +252,7 @@ freeR::which_duplicated(log_key$logbook_id_use)
 
 # Does number of fishers always exceed number of crew?
 sum(log_key$n_crew_fished < log_key$n_fishers, na.rm=T)
+#yes 
 ```
 
 #Inspect Data
@@ -269,7 +273,7 @@ range(data_clean$month)
 range(data_clean$day)
 range(data_clean$date_received, na.rm=T)
 range(data_clean$date_submitted, na.rm=T) # 1900-01-01 = NA?
-range(data_clean$temp_f, na.rm=T)
+range(data_clean$temp_f, na.rm=T) #there are some temperatures which are entered incorrectly-- range from -6 to 740 makes no sense
 
 # Ports
 port_key_check <- data_clean %>% 

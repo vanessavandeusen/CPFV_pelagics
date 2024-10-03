@@ -166,6 +166,24 @@ CINMS_years_CPUE<-CINMS_years_CPUE %>%
            CPUE_neg_se=average_cpue_p-se_cpue_p) 
 ```
 
+##Agg CPUE_p by year and block 
+```{r}
+CINMS_year_block_CPUE<-CPFV_pelagics_allblocks_rm %>%
+  group_by(year, block_id)%>%
+  summarise(average_cpue_p= mean(CPUE_p), 
+            total_caught=sum(total_caught))
+```
+##Agg redact boats by year and block
+```{r}
+CINMS_year_block_boat<-CPFV_pelagics_allblocks_rm %>%
+  group_by(year, block_id)%>%
+  summarise(unique_vessels= n_distinct(id_vessel))
+CINMS_year_block_boat_redact<- CINMS_year_block_boat %>% subset(unique_vessels<4)
+CINMS_year_block_boat_redact<-subset(CINMS_year_block_boat_redact, select= -unique_vessels)
+CINMS_year_block_boat_redact$redact<-"Y"
+```
+
+
 #_______________
 #Graphing
 ##Line Graph by Species Group
@@ -376,7 +394,7 @@ ggsave("CINMS_location_map.jpeg", plot= plot3, width = 5, units="in", path = pat
 ###Joining shapefile + data
 ```{r}
 ##putting in Zeros where there isn't data about fishing blocks
-complete_pelagicsCINMS_year_block_rm<-tidyr::complete(pelagicsCINMS_year_block_rm, block_id, year, fill=list(total=0))
+complete_pelagicsCINMS_year_block_rm<-tidyr::complete(ungroup(CINMS_year_block_CPUE), block_id, year, fill=list(average_cpue_p=0, total_caught=0))
 
 ##joining shapefile and data
 CINMS_shpfile_blocks<-rename(CINMS_shpfile_blocks, "block_id"= "BLOCK10_ID")
@@ -387,14 +405,36 @@ CINMS_fishing_blocks_pelagic<- replace(CINMS_fishing_blocks_pelagic, is.na(CINMS
 
 ##Calculating Proportional catch (total/max ever)
 CINMS_fishing_blocks_pelagic<-CINMS_fishing_blocks_pelagic %>%
-  mutate(proportional_catch= total_catch/254143)
+  mutate(proportional_catch= total_caught/254143)
 ```
 
+###Joining shapefile + redaction
+```{r}
+##joining data and redaction
+complete_pelagicsCINMS_year_block_rm$year<-as.character(complete_pelagicsCINMS_year_block_rm$year)
+CINMS_year_block_boat_redact$year<-as.character(CINMS_year_block_boat_redact$year)
+complete_pelagicsCINMS_year_block_rm_redact<-left_join(complete_pelagicsCINMS_year_block_rm,
+                                          CINMS_year_block_boat_redact,  
+                                          by= c("block_id","year"), 
+                                          relationship= "many-to-many", 
+                                          na_matches= "never")
+complete_pelagicsCINMS_year_block_rm_redact$year<-as.character(complete_pelagicsCINMS_year_block_rm_redact$year) 
+complete_pelagicsCINMS_year_block_rm_redact$redact[is.na(complete_pelagicsCINMS_year_block_rm_redact$redact)]<-"N"
+complete_pelagicsCINMS_year_block_rm_redact$total_caught[complete_pelagicsCINMS_year_block_rm_redact$redact=="Y"]<-NA
+complete_pelagicsCINMS_year_block_rm_redact$average_cpue_p[complete_pelagicsCINMS_year_block_rm_redact$redact=="Y"]<-NA
 
-#Independent scale/CPUE_t
+##joining shapefile and data
+CINMS_redaction_blocks_pelagic<-left_join(CINMS_shpfile_blocks,complete_pelagicsCINMS_year_block_rm_redact,  by= "block_id", relationship= "many-to-many", na_matches= "never")
+CINMS_redaction_blocks_pelagic$year<-as.character(CINMS_redaction_blocks_pelagic$year)
+
+
+```
+
+#Independent scale (geographic range)-- Average CPUE
 ###Path
 ```{r}
-path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year/independent_scale/CPUE_t"
+#path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year/independent_scale/CPUE_fish_per_person_no_redact"
+path_plot_heatmap<-"\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/graphs/CINMS/CINMS_heatmaps_by_year/independent_scale/CPUE_fish_per_person_redact"
 
 ```
 
@@ -404,16 +444,20 @@ iterative loop for printing each block
 ###For before MPA designation state= 2004
 ```{r}
 ##Subsetting so can add MPAs as designated
-CINMS_fishing_blocks_pelagic_2004<- subset(CINMS_fishing_blocks_pelagic, year<2004)
+#without redaction
+#CINMS_fishing_blocks_pelagic_2004<- subset(CINMS_fishing_blocks_pelagic, year<2004)
+#with redaction
+CINMS_fishing_blocks_pelagic_2004<- subset(CINMS_redaction_blocks_pelagic, year<2004)
 
 ##Graphing and saving
 for(i in unique(CINMS_fishing_blocks_pelagic_2004$year)){
   x<-ggplot()+
      geom_sf(data=CINMS_shpfile_blocks, fill="white")+
-     geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=CPUE))+
+     geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2004, year==i & year<2004), aes(fill=average_cpue_p))+
+    #geom_sf(data= CINMS_redaction_blocks_pelagic, fill="grey")+
      scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Catch per unit effort \n(fish caught/trip)",
-                         na.value = "grey100", limits= c(0, 500))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 8))+
      theme_classic()+
      annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
      annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -421,11 +465,11 @@ for(i in unique(CINMS_fishing_blocks_pelagic_2004$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
      xlab("Longitude")+
      ylab("Latitude")+
-     ggtitle("CINMS CPFV Catch Per Unit Effort (fish/trips)", 
+     ggtitle("CINMS CPFV Average Catch Per Unit Effort (fish caught/fisher)", 
               subtitle= paste("Year", i, sep = "-"))
 
   
-  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_average_cpue_fish_per_person", i, ".png") )
 }
 ```
 
@@ -434,18 +478,22 @@ for(i in unique(CINMS_fishing_blocks_pelagic_2004$year)){
 ###For after state designation MPAs
 ```{r}
 ##Subsetting so can add MPAs as designated
-CINMS_fishing_blocks_pelagic_2004_2007<- subset(CINMS_fishing_blocks_pelagic, year>2004 & year<2007)
+#Without redaction
+#CINMS_fishing_blocks_pelagic_2004_2007<- subset(CINMS_fishing_blocks_pelagic, year>2004 & year<2007)
+#with redaction
+CINMS_fishing_blocks_pelagic_2004_2007<- subset(CINMS_redaction_blocks_pelagic, year>2004 & year<2007)
+
 
 ##Graphing and printing
 for(i in unique(CINMS_fishing_blocks_pelagic_2004_2007$year)){
   x<- ggplot()+
       geom_sf(data=CINMS_shpfile_blocks, fill="white")+
       geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2004_2007, year==i & year>2003 & year<2007),
-              aes(fill=CPUE))+
+              aes(fill=average_cpue_p))+
       geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
       scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Catch per unit effort \n(fish caught/trip)",
-                         na.value = "grey100", limits= c(0, 500))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 8))+
       theme_classic()+
       annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
       annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -453,28 +501,31 @@ for(i in unique(CINMS_fishing_blocks_pelagic_2004_2007$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
       xlab("Longitude")+
       ylab("Latitude")+
-      ggtitle("CINMS CPFV Catch Per Unit Effort (fish/trips)", 
+      ggtitle("CINMS CPFV Average Catch Per Unit Effort (fish caught/fisher)", 
               subtitle= paste("Year", i, sep = "-"))
   
-  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_cpue_fish_per_person", i, ".png") )
 }
 ```
 
 ### For after fed designation of MPAs
 ```{r}
 ##Subsetting so can add MPAs as designated
-CINMS_fishing_blocks_pelagic_2007<- subset(CINMS_fishing_blocks_pelagic, year>2006)
+#without redaction
+##CINMS_fishing_blocks_pelagic_2007<- subset(CINMS_fishing_blocks_pelagic, year>2006)
+#with redaction
+CINMS_fishing_blocks_pelagic_2007<- subset(CINMS_redaction_blocks_pelagic, year>2006)
 
 ##Graphing and printing
 for(i in unique(CINMS_fishing_blocks_pelagic_2007$year)){
   x<- ggplot()+
       geom_sf(data=CINMS_shpfile_blocks, fill="white")+
-      geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=CPUE))+
+      geom_sf(data= subset(CINMS_fishing_blocks_pelagic_2007, year==i & year>2006), aes(fill=average_cpue_p))+
               geom_sf(data=CINMS_state_MPA, color="black", fill= "darkblue", alpha=0.25)+
               geom_sf(data=CINMS_fed_MPA, color="black", fill="darkgreen", alpha= 0.25)+
       scale_fill_gradientn(colours=rev(magma(6)),
-                         name="Catch per unit effort \n(fish caught/trip)",
-                         na.value = "grey100", limits= c(0, 500))+
+                         name="Average catch per unit effort \n(fish caught/fisher)",
+                         na.value = "grey", limits= c(0, 8))+
       theme_classic()+
       annotation_scale(location= "bl", width_hint= 0.2, pad_y = unit(1, "cm"), pad_x = unit(0.7, "cm"))+
       annotation_north_arrow(location= "tr", which_north= "true", width= unit(1, "cm"),  
@@ -482,10 +533,10 @@ for(i in unique(CINMS_fishing_blocks_pelagic_2007$year)){
                            pad_x = unit(0.5, "cm"), pad_y = unit(0.1, "cm"))+
       xlab("Longitude")+
       ylab("Latitude")+
-      ggtitle("CINMS CPFV Catch Per Unit Effort (fish/trips)", 
+      ggtitle("CINMS CPFV Average Catch Per Unit Effort (fish caught/fisher)", 
               subtitle= paste("Year", i, sep = "-"))
   
-  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_", i, ".png") )
+  ggsave(x, path= path_plot_heatmap, file=paste0("CINMS_heatmap_individual_cpue_fish_per_person", i, ".png") )
 }
 ```
 
