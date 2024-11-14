@@ -1,0 +1,68 @@
+---
+title: "Gas_price_adjustment_CPFV"
+author: "Van Deusen"
+date: "2024-02-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(tidyr)
+library(viridis)
+library(quantmod) 
+library(egg)
+library(ggspatial)
+path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
+```
+
+## Importing data
+```{r cars}
+CPIAUCSL<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CPIAUCSL.csv")
+
+gas_prices<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/Weekly_West_Coast_Regular_All_Formulations_Retail_Gasoline_Prices.csv")
+```
+
+#Adjusting Gas Prices
+```{r}
+#Formatting Consumer Price Index
+CPIAUCSL_df<-CPIAUCSL
+CPIAUCSL_df$DATE<- lubridate::mdy(CPIAUCSL_df$DATE)
+CPIAUCSL_df$Year<-CPIAUCSL_df$DATE
+CPIAUCSL_df$Year<-format(as.Date(CPIAUCSL_df$Year, format= "%Y/%m/%d"), "%Y")
+avg.cpi<-apply.yearly(CPIAUCSL_df, mean)
+avg.cpi$adjust2023<-(avg.cpi$CPIAUCSL/avg.cpi$CPIAUCSL[avg.cpi$Year == 2023])
+
+#Formatting gas prices 
+##removing non data rows in R 
+gas_prices<-gas_prices[-c(1,2,3,4),]
+gas_prices<-rename(gas_prices, "Date"= "Weekly West Coast Regular All Formulations Retail Gasoline Prices", "Gas_price"="...2" )
+gas_prices$Date<- lubridate::mdy(gas_prices$Date)
+gas_prices$Year<- gas_prices$Date
+gas_prices$Year<-format(as.Date(gas_prices$Year, format= "%Y/%m/%d"), "%Y")
+avg.gas.price<-apply.yearly(gas_prices, mean)
+
+#Adjusting for inflation
+gas_adjusted<-left_join(avg.gas.price, avg.cpi, by= "Year", relationship = "one-to-one", na_matches = "never")
+gas_adjusted$cpi_adjust2023<-(gas_adjusted$CPIAUCSL/gas_adjusted$CPIAUCSL[gas_adjusted$Year == 2023])
+gas_adjusted$adjust_price<-gas_adjusted$Gas_price/gas_adjusted$cpi_adjust2023
+
+#Add extra na rows
+
+
+#Final Format
+gas_adjusted2020<-subset(gas_adjusted, Year<=2020)
+gas_adjusted$Year<-as.numeric(gas_adjusted$Year)
+
+
+##Exporting
+write.csv(gas_adjusted2020,file.path(path_out, "gas_adjusted2020.csv"))
+```
