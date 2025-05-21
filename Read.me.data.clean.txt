@@ -1,0 +1,24 @@
+Read.me- CPFV_pelagics_data_clean
+Author: Van Deusen
+-------
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review 
+
+PI: Jenny Selgrath 
+------- 
+Purpose of code: 
+clean CPFV data. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
+--------
+input: cpfv_merged_no_pii.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
+data output: CDFW_1980_2020_cpfv_logbook_data.Rds
+
+---- QAQC------ 
+- Initally, cleaning code was run using sp_list_key.csv as the species key, and port_key.csv as the port code key (provided by Jenny- see CPFV_pelagics_data Read.me file for more information). In checking the data after cleaning using these keys, a huge number of entries didn't correspond to a known port or species name. Jenny suggested seeing if port or species IDs had changed overtime. On 11/22/2023, VVD downloaded keys from the CDFW website that include historic port and species codes (provided by Jenny- see CPFV_pelagics_data Read.me file for more information). These better fit the data, reducing entries with no associated port from 1,118,060 to 6,861 and entries with no associated species from 11,721,667 to 111,476. 
+
+- There are 12 entries with temperatures listed as being over 100 degrees F. These must be mistakes-- 3 appear to have an erroneous 0 (740 degrees is likely 74 degrees) while the others appear to have an erroneous 5 (556 degrees is likely 56 degrees). 
+
+
+---- Notes for Me-----
+- One helpful aspect of a lack of associated species codes is that the data itself has information on what species was caught (within column comm_name_orig). Need to spend more time thoroughly comparing the two columns against one another. 
+	- specificially see species_key_check 
+		be sure that:
+		select(species_code, species_name, comm_name_orig)

@@ -1,0 +1,51 @@
+Read.me-- Analysis CPFV pelagic 
+6/25/2024 
+_________
+RMD File Descriptions: 
+
+Old script adapted into current versions-- 
+  CPFV_pelagics_analyze_visualize.RMD -- initial document with data analysis across all geographic ranges-- adapted into below files 	(CPFV_pelagics_CINMS_block_visualization.RMD, CPFV_pelagics_MPA_block_visualization.RMD, CPFV_pelagics_SoCal_block_visualization.RMD) to 	separate out geographic ranges
+  Step2_plot_cpfv_logbooks(1).R -- code provided by Chris Free-- was adapted into subsequent scripts
+~~~
+Current script-- living files-- 
+  Metatdata/accompanying data analysis: 
+     CPFV_pelagics_Temp_Anomaly_Data_Processing.RMD
+     Gas_price_adjustment_CPFV.RMD 
+
+  Data visualization files (across different geographic scales): 
+     CPFV_pelagics_CINMS_block_visualization.RMD 
+     CPFV_pelagics_MPA_block_visualization.RMD 
+     CPFV_pelagics_SoCal_block_visualization.RMD 
+~~~
+*** Known mistakes in data: 
+	- there are 12 entries that have temperatures recorded that are over 100 degrees F 
+	- there are multiple entries that have over 10 crew (sometimes as many as 100)-- Ross at CDFW talked about how this is likely a product of incorrect entry. Likely an additional 0 was added when the number was entered OR they multiplied that number of days by the number of crew on each day-- counting each crew for each day! 
+	- there were 2 rows where n_fishers=NA, removed rows from analysis
+~~~
+**** Questions to resolve/things to think about more: 
+	- Calculating CPUE_p (number of fish/people) may be distorted by the fact that not all people on the boat/charter are going for that species, not accounting for effort to target that species specifically
+		- How does this impact the data? 
+	- Calculating aggregated number of trips/aggregated number of people -- is it aggregating over a year and dividing by catch/people
+	- at CINMS level, when aggregating by number of fishers get NAs-- where are they coming from?
+7/18/24-- calculated CPUE_t and CPUE_p for CINMS geographic scale, need to do for SoCal and MPA
+~~~~
+7.18.24
+Ross Cooper from CDFW answered some questions about data columns via email: 
+" These fields can be a little confusing so hopefully I can assist. For starters, yes those relatively high counts of anglers (n_fishers) are likely data entry errors with a duplicated / erroneous last digit (e.g. 200 is likely supposed to be 20, though that is not guaranteed to be the case. Could be similar issues for crew fished). Another issue is CPFV operators multiplying the number of anglers by the number of days per trip and consolidating them on a single log instead of one log per day, as they are supposed to do (e.g. 20 anglers on a 3 day trip should be 20 on 3 distinct logs instead of 60 on 1 log). These are more rare issues, but might explain some of the outliers you are seeing.
+
+It is worth noting that the number of fishers and number of fish kept are totals, and the crew fished / fish caught by crew fields detail what subtotal of the overall total angler / fish count were represented by the CPFV’s crew. For a very simple example, if there were 5 paid anglers and 1 crew member and every person caught 1 bluefin tuna, the log would say 6 fishers, 6 bluefin tuna kept, 1 crew fished, 1 fish caught by crew. So you shouldn’t need to add those fields together as the n_kept already represents the total amount of that species kept on that entire trip. Additionally, we don’t really know which exact fish the crew caught based on the logs, so such calculations range from tricky to impossible (for example, if I changed that above example to be 6 different species, we would have no idea which fish the crew caught, only that the boat altogether caught a grand total of X amounts of Y species)." 
+
+In summary-- n_kept includes crew and customers as does n_fishers, in a follow up email I verified that n_kept wouldn't include n_released. Total caught would still be n_kept + n_released. 
+~~~
+7.18.24-- took Mackerel out of the analysis-- doesn't make sense to include because it is a bait species-- suggested by Carlos at CDFW 
+~~~
+7.18.24-- ended up realizing that this didn't make sense on 8.7.24 because it treats each year as one sample/count opposed to treating each trip as a sample
+When calculating CPUE did two ways...
+	- CPUE_t = number of fish/trips 
+	- CPUE_p = number of fish/people 
+		When calculating there were 2 NAs in n_fishers-- removed rows from analysis
+		When calculating, sum year block NA counted as 0 
+~~~
+8.7.24-- in the data_clean RMD, calculated the absolute value of total_caught because there was one entry where the total number caught was -33-- mistake in the data 
+~~~
+9.9.24-- omitted entries where n_fishers= 0 or Na
