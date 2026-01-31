@@ -30,35 +30,45 @@ path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/D
 
 ## Importing data
 ```{r}
-#cpfv_merged_no_pii<- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_no_pii.csv")
-
+##CPFV data-- ID for vessels included, PII removed
 cpfv_merged_uniqueID<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/cpfv_merged_uniqueID.csv")
-blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/blocks.csv")
+#includes "id_vessel"= v_1, v_2, etc.
+
+##Associated key building dataframes
+blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/blocks.csv") 
+### Column names: "OBJECTID"      "BLOCK10_ID"    "AreaMi"        "Acres"         "Shape__Area"   "Shape__Length"
+
 port_DF <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_port_historic.csv")
+###Column names: "Port Area"        "Port Name"        "Port Code"        "Discontinue Date" "...5"
+
 species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_Species_historic.csv")
+###Column names: "Species Name"     "Species ID"       "Species Group"    "CCL Category"     "Discontinue Date" "...6"
 ```
 
-## Formatting data
+## Creating key data
 ```{r}
-#cpfv_merged_no_pii$SpeciesCode<-as.numeric(cpfv_merged_no_pii$SpeciesCode)
-cpfv_merged_uniqueID$SpeciesCode<-as.numeric(cpfv_merged_uniqueID$SpeciesCode)
-
 block_key <- blocks %>% 
-  sf::st_drop_geometry()%>% 
-  rename("block_id"= "BLOCK10_ID", "block_areaMi"= "AreaMi", "block_Acres"="Acres", "block_shape_area"= "Shape__Area", "block_shape_length"= "Shape__Length")
+ # st_drop_geometry()%>% 
+  rename("block_id"= "BLOCK10_ID", 
+         "block_areaMi"= "AreaMi", 
+         "block_Acres"="Acres", 
+         "block_shape_area"= "Shape__Area", 
+         "block_shape_length"= "Shape__Length") %>%
+  mutate(block_id= as.numeric(block_id))
 
 port_key<- port_DF %>% 
   clean_names("snake")%>%
-  rename(port= port_name, port_complex= port_area)%>%
+  rename(port= port_name, 
+         port_complex= port_area)%>%
   select(-c(x5))
 
 
 species_key<-species_DF %>% 
   clean_names("snake") %>%
-  rename("species_code"= "species_id", "species_discontinue_date"= "discontinue_date")%>% 
-  select(-c(x6))
-species_key$species_code<-as.numeric(species_key$species_code)
-
+  rename("species_code"= "species_id", 
+         "species_discontinue_date"= "discontinue_date")%>% 
+  select(-c(x6))%>%
+  mutate(species_code = as.numeric(species_code))
 ```
 
 
@@ -128,97 +138,117 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
 #Clean data 
 ```{r}
  data_clean <- cpfv_merged_uniqueID %>% 
+#____Cleaning____________________________ 
+#Step 1.1: Initial Column Standardization and Name Cleaning --------
   janitor::clean_names("snake") %>% 
-  rename(date=log_date,
-         month=log_month,         
-         day=log_day,
-         year=log_year,
-         block_id=block,
-         hm_fished=hours_minutes_fished,
-         comm_name_orig=species, 
-         temp_f=temperature,
-         depth_ft=depth,
-         n_fishers=number_of_fishers,
-         hrs_fished=hours_fished,
-         n_kept=number_kept,
-         n_released=number_released,
-         n_lost_to_sea_lions=number_lost_to_sea_lions,
-         n_caught_by_crew=number_of_fish_caught_by_crew,
-         n_crew_fished=number_of_crew_fished) %>% 
-   mutate(date=lubridate::mdy(date),
-         date_received=lubridate::mdy(date_received),
-         date_submitted=lubridate::mdy(date_submitted)) %>% 
-  mutate(across(.cols=month:year, .fns=as.numeric))  %>%
-  mutate(port_code=as.numeric(port_code)) %>%
-  left_join(port_key, by="port_code", relationship = "many-to-one", na_matches = "never" ) %>%
-  mutate(port=ifelse(is.na(port), "Invalid", port)) %>%
-  mutate(trip_type=stringr::str_to_sentence(trip_type)) %>%
-  mutate(block_id=as.numeric(block_id)) %>%
-  left_join(block_key %>% select("block_id", "block_areaMi", "block_Acres"), by="block_id") %>%
-  mutate(depth_ft=as.numeric(depth_ft) %>% abs(.)) %>% 
-  mutate(temp_f=as.numeric(temp_f))%>%
-  mutate(n_fishers=as.numeric(n_fishers), hrs_fished=as.numeric(hrs_fished)) %>%
-  #mutate(hm_fished=stringr::str_squish(hm_fished), hm_fished=recode(hm_fished, "800"="", "100"="", "145"="", "600"="", "300"="", "830"="", "730"="", "330"="", "251"="", "615"=""),hm_fished=ifelse(hm_fished=="", NA, hm_fished)) 
-  ##I am not sure what this code is doing
-  mutate(comm_name_orig=stringr::str_squish(comm_name_orig))%>%
- # mutate(species_code=recode(species_code, "Oarfish"="") %>% as.numeric(.)) %>%
-  left_join(species_key %>% select(species_code, species_name, species_group,species_discontinue_date), by=c("species_code")) %>%
-  #mutate(species_name=ifelse(species_code==2665 , "Oarfish", species_name))%>%
-  mutate(across(.cols=n_kept:n_crew_fished, .fns=as.numeric)) %>%
-  mutate(across(.cols=n_kept:n_caught_by_crew, .fns=function(x){ifelse(is.na(x), 0, x)}))%>% 
-  mutate(target_species_rockfishes=ifelse(!is.na(target_species_rockfishes), "Rockfish", "NA"),
+  rename(
+    date=                     log_date,
+    month=                    log_month,         
+    day=                      log_day,
+    year=                     log_year,
+    block_id=                 block,
+    hm_fished=                hours_minutes_fished,
+    comm_name_orig=           species, 
+    temp_f=                   temperature,
+    depth_ft=                 depth,
+    n_fishers=                number_of_fishers,
+    hrs_fished=               hours_fished,
+    n_kept=                   number_kept,
+    n_released=               number_released,
+    n_lost_to_sea_lions=      number_lost_to_sea_lions,
+    n_caught_by_crew=         number_of_fish_caught_by_crew,
+    n_crew_fished=            number_of_crew_fished
+    ) %>% 
+  # Step 1.2: Ensuring that date/time and count columns are in the correct format 
+  mutate(
+    #Convert characters to Date objects
+    date=              lubridate::mdy(date),
+    date_received=     lubridate::mdy(date_received),
+    date_submitted=    lubridate::mdy(date_submitted), 
+    #Ensure number columns are coded as numeric
+    across(.cols= c(month, year, port_code, block_id, depth_ft, temp_f, n_fishers, n_caught_by_crew, 
+               n_crew_fished, hrs_fished, n_kept, n_released, hrs_fished, hm_fished, species_code),
+           .fns= as.numeric), 
+    across(.cols= c(n_kept, n_caught_by_crew, n_crew_fished, n_fishers, n_released), 
+           .fns= ~replace_na(.x, 0))
+    ) %>%
+  # Step 1.3: Removing white space from common names and trip types 
+  mutate(comm_name_orig=stringr::str_squish(comm_name_orig), 
+         trip_type = stringr::str_to_sentence(trip_type)
+         )%>%
+#___Joins____________________________
+# Step 2.1: Spatial Joins-- Ports and Blocks
+  left_join(port_key, by="port_code", 
+            relationship = "many-to-one", 
+            na_matches = "never" ) %>%
+  mutate(port= ifelse(is.na(port), "Invalid", port), #returns "Invalid" if there is an NA here
+    ) %>%
+  left_join(block_key %>% 
+              select("block_id", "block_areaMi", "block_Acres"), 
+            by="block_id") %>%
+  
+  # Step 5: Species Key Joins 
+  left_join(species_key %>% select(species_code, species_name, species_group, species_discontinue_date), 
+            by=c("species_code")) %>%
+#___Consolidating Columns______________________   
+# Step 3.1: Consolidating Col
+    
+##If there is interest in including oarfish in the analysis: 
+####    mutate(species_code=recode(species_code, "Oarfish"="") %>% as.numeric(.)) %>% 
+####    mutate(species_name=ifelse(species_code==2665 , "Oarfish", species_name))%>%
+   mutate(
+     target_species= paste( #puts the name of the species, if not the target, puts "NA", then puts all the targets in a string to consolidate to a single column 
+       ifelse(!is.na(target_species_rockfishes), "Rockfish", "NA"),
          target_species_misc_coastal=ifelse(!is.na(target_species_misc_coastal), "Misc. coastal", "NA"),
-         target_species_other=ifelse(!is.na(target_species_other), "Other", "NA"),
-         target_species_lingcod=ifelse(!is.na(target_species_lingcod), "Lingcod", "NA"),
-         target_species_tuna=ifelse(!is.na(target_species_tuna), "Tuna", "NA"),
-         target_species_misc_offshore=ifelse(!is.na(target_species_misc_offshore), "Misc. offshore", "NA"),
-         target_species_salmon=ifelse(!is.na(target_species_salmon), "Salmon", "NA"),
-         target_species_potluck=ifelse(!is.na(target_species_potluck), "Potluck", "NA"),
-         target_species_striped_bass=ifelse(!is.na(target_species_striped_bass), "Striped bass", "NA"),
-         target_species_sharks=ifelse(!is.na(target_species_sharks), "Sharks", "NA"),
-         target_species_sturgeon=ifelse(!is.na(target_species_sturgeon), "Sturgeon", "NA"),
-         target_species_misc_bay=ifelse(!is.na(target_species_misc_bay), "Misc. bay", "NA"))%>%
-   mutate(target_species=paste(target_species_rockfishes, target_species_misc_coastal, 
-                              target_species_other, target_species_lingcod, 
-                              target_species_tuna, target_species_misc_offshore, 
-                              target_species_salmon, target_species_potluck, 
-                              target_species_striped_bass, target_species_sharks, 
-                              target_species_sturgeon, target_species_misc_bay, sep=", ")) %>% 
-  mutate(target_species=gsub("NA, |, NA", "", target_species)) %>% ## not completely sure how this works ("NA, |, NA")
-  select(-c(target_species_lingcod:target_species_misc_bay)) %>%
-  mutate(fishing_method_anchored=ifelse(!is.na(fishing_method_anchored), "Anchored", "NA"),
-         fishing_method_drifting=ifelse(!is.na(fishing_method_drifting), "Drifting", "NA"),
-         fishing_method_trolling=ifelse(!is.na(fishing_method_trolling), "Trolling", "NA"),
-         fishing_method_light_tackle=ifelse(!is.na(fishing_method_light_tackle), "Light tackle", "NA"),
-         fishing_method_diving=ifelse(!is.na(fishing_method_diving), "Diving", "NA"),
-         fishing_method_other=ifelse(!is.na(fishing_method_other), "Other", "NA"),
-         fishing_method_mooching=ifelse(!is.na(fishing_method_mooching), "Mooching", "NA")) %>% 
-  mutate(fishing_method=paste(fishing_method_anchored, fishing_method_drifting, 
-                              fishing_method_trolling, fishing_method_light_tackle, 
-                              fishing_method_diving, fishing_method_other, 
-                              fishing_method_mooching, sep=", "))%>%
-  mutate(fishing_method=gsub("NA, |, NA", "", fishing_method)) %>% 
-  select(-c(fishing_method_trolling:fishing_method_other))%>% 
-  mutate(bait_used_squid_dead=ifelse(!is.na(bait_used_squid_dead), "Squid (dead)", "NA"),
-         bait_used_sardines_live=ifelse(!is.na(bait_used_sardines_live), "Sardines (live)", "NA"),
-         bait_used_anchovies_live=ifelse(!is.na(bait_used_anchovies_live), "Anchovies (live)", "NA"),
-         bait_used_squid_live=ifelse(!is.na(bait_used_squid_live), "Squid (live)", "NA"),
-         bait_used_other_dead=ifelse(!is.na(bait_used_other_dead), "Other (dead)", "NA"),
-         bait_used_anchovies_dead=ifelse(!is.na(bait_used_anchovies_dead), "Anchovies (dead)", "NA"),
-         bait_used_sardines_dead=ifelse(!is.na(bait_used_sardines_dead), "Sardines (dead)", "NA"), 
-         bait_used_other_live=ifelse(!is.na(bait_used_other_live), "Other (live)", "NA")) %>% 
-  mutate(bait_used=paste(bait_used_squid_dead, bait_used_sardines_live, 
-                         bait_used_anchovies_live, bait_used_squid_live, 
-                         bait_used_other_dead, bait_used_anchovies_dead, 
-                         bait_used_sardines_dead, bait_used_other_live, sep=", ")) %>% 
-  mutate(bait_used=gsub("NA, |, NA", "", bait_used)) %>% 
-  select(-c(bait_used_anchovies_live:bait_used_other_dead))
-
-data_clean<- data_clean%>%
-  mutate(ID=seq.int(nrow(data_clean)))%>%
-  mutate(logbook_id_use=paste(ID, date, id_vessel, sep="-"))%>%
+         ifelse(!is.na(target_species_other), "Other", "NA"),
+         ifelse(!is.na(target_species_lingcod), "Lingcod", "NA"),
+         ifelse(!is.na(target_species_tuna), "Tuna", "NA"),
+         ifelse(!is.na(target_species_misc_offshore), "Misc. offshore", "NA"),
+         ifelse(!is.na(target_species_salmon), "Salmon", "NA"),
+         ifelse(!is.na(target_species_potluck), "Potluck", "NA"),
+         ifelse(!is.na(target_species_striped_bass), "Striped bass", "NA"),
+         ifelse(!is.na(target_species_sharks), "Sharks", "NA"),
+         ifelse(!is.na(target_species_sturgeon), "Sturgeon", "NA"),
+         ifelse(!is.na(target_species_misc_bay), "Misc. bay", "NA"), 
+       sep = ", "
+       ),
+     fishing_method= paste( #puts the name of the fishing method, if not that type, puts "NA", then puts all the fishing types in a string to consolidate to a single column
+        ifelse(!is.na(fishing_method_anchored), "Anchored", "NA"),
+        ifelse(!is.na(fishing_method_drifting), "Drifting", "NA"),
+        ifelse(!is.na(fishing_method_trolling), "Trolling", "NA"),
+        ifelse(!is.na(fishing_method_light_tackle), "Light tackle", "NA"),
+        ifelse(!is.na(fishing_method_diving), "Diving", "NA"),
+        ifelse(!is.na(fishing_method_other), "Other", "NA"),
+        ifelse(!is.na(fishing_method_mooching), "Mooching", "NA"),
+      sep = ", " 
+      ),
+     bait_used= paste( #puts the name of the bait, if not that type, puts "NA", then puts all the bait types in a string to consolidate to a single column
+       ifelse(!is.na(bait_used_squid_dead), "Squid (dead)", "NA"),
+       ifelse(!is.na(bait_used_sardines_live), "Sardines (live)", "NA"),
+       ifelse(!is.na(bait_used_anchovies_live), "Anchovies (live)", "NA"),
+       ifelse(!is.na(bait_used_squid_live), "Squid (live)", "NA"),
+       ifelse(!is.na(bait_used_other_dead), "Other (dead)", "NA"),
+       ifelse(!is.na(bait_used_anchovies_dead), "Anchovies (dead)", "NA"),
+       ifelse(!is.na(bait_used_sardines_dead), "Sardines (dead)", "NA"), 
+       ifelse(!is.na(bait_used_other_live), "Other (live)", "NA")), 
+     sep = ", ") %>%
+    mutate(across(c(target_species, fishing_method, bait_used), #Removes the NAs within the string 
+                  ~gsub("NA, |, NA", "", .x))) %>%
+    
+#___Consolidating Columns______________________   
+# Step 4.1: Cacluating total fishers, total catch, and days fished 
+  mutate(
+    total_caught= abs(n_kept+ n_released),
+    total_fishers= abs(n_fishers + n_crew_fished),
+    days_fished= hrs_fished/24
+  ) %>%
+  
+# Step 4.2: ID generation and column re-ordering  
+  mutate(ID= row_number(), 
+         logbook_id_use = paste(ID, date, id_vessel, sep="-")
+         )%>%
   select(logbook_id_use, 
-         year, month, day, 
+         year, month, day, total_caught, total_fishers, days_fished, 
          date, date_submitted, date_received,
          port_complex, port_code, port,
          no_activity_month,
@@ -231,28 +261,6 @@ data_clean<- data_clean%>%
          n_kept, n_released, n_lost_to_sea_lions, n_caught_by_crew,id_vessel, 
          everything())
 
-```
-
-# Build Logbook ID
-```{r}
-# Build logbook id
-log_key <- data_clean %>% 
-  group_by(year, date,
-           port_complex, port, port_code, id_vessel,
-           no_activity_month, trip_type, non_paying, 
-           departure_time, return_time,
-           block_id,
-           depth_ft, temp_f,
-           hm_fished, hrs_fished,
-           n_fishers, n_crew_fished, logbook_id_use) %>% 
-  summarize(n_kept=sum(n_kept)) %>% 
-  ungroup()
-# Are the logbook ids unique? Mine should be, there's shouldn't be
-freeR::which_duplicated(log_key$logbook_id_use)
-
-# Does number of fishers always exceed number of crew?
-sum(log_key$n_crew_fished < log_key$n_fishers, na.rm=T)
-#yes 
 ```
 
 #Inspect Data
@@ -381,21 +389,6 @@ table(data$bait_used)
 
 ```
 
-# Didn't do-- Free Final processing
-```{r}
-
-################################################################################
-
-# Final format
-data_out <- data %>% 
-  # Add HR calculated from HM
-  # (proven to be more comprehensive and identical)
-  left_join(duration_key_check %>% select(hm_fished, hrs_fished2), by="hm_fished") %>% 
-  select(-hrs_fished) %>% 
-  rename(hrs_fished=hrs_fished2) %>% 
-  select(filename:hm_fished, hrs_fished, everything()) 
-
-```
 
 #Export
 ```{r}
@@ -414,8 +407,39 @@ Barracuda, California; Bonito, Pacific; Anchovy, northern; **dolphin (fish)**; M
 swordfish is not within subset of data 
 ###Selecting pelagics species 
 ```{r}
-unique(data_clean$species_name)
-CPFV_pelagic_subset<-data_clean%>% subset(comm_name_orig=="Barracuda, California"|
+pelagic_species <- c("Barracuda, California","Bonito, Pacific", "Anchovy, northern", "dolphin (fish)", "Mackerel, jack", "Mackerel, Pacific", "Marlin, striped", "Mackerel, unspecified", "Opah", "Seabass, white", "Shark, blue", "Shark, shortfin mako", "Shark, thresher", "Tuna, albacore", "Tuna, bluefin", "Tuna, skipjack", "Tuna, skipjack, black", "Tuna, unspecified", "Tuna, yellowfin", "Yellowtail", "Sardine, Pacific", "Shark, pelagic thresher", "Shark, white", "Swordfish")
+
+CPFV_pelagic_subset<- data_clean %>%
+  filter(comm_name_orig %in% pelagic_species) %>% #filter out pelagic species
+  filter(!is.na(n_fishers), n_fishers !=0) %>% #filter out when there is no recorded number of fishers
+  #Categorize species
+  mutate(
+    species_type = case_when(
+      species_name %in% 
+        c("Shark, blue","Shark, shortfin mako","Shark, thresher", "Shark, white","Shark, pelagic thresher") 
+            ~ "Shark", 
+      species_name %in% 
+        c("Tuna, albacore", "Tuna, bluefin", "Tuna, skipjack", "Tuna, skipjack, black", "Tuna, unspecified", "Tuna, yellowfin")
+            ~ "Tuna", 
+      species_name %in%
+        c("Mackerel, jack", "Mackerel, Pacific", "Mackerel, unspecified")
+            ~ "Mackerel", 
+      species_name %in%
+        c("Marlin, striped", "Swordfish")
+            ~ "Billfish", 
+      species_name %in%
+        c("Anchovy, northern", "Sardine, Pacific")
+            ~ "Baitfish", 
+      species_name == "Bonito, Pacific"      ~ "Bonito",
+      species_name == "Opah"                ~ "Opah",
+      species_name == "Yellowtail"          ~ "Yellowtail"
+    ),
+    #Calculate effort and CPUE
+    CPUE_p = ((total_caught/total_fishers)/days_fished)
+  )
+  
+  
+  data_clean%>% subset(comm_name_orig=="Barracuda, California"|
                                               comm_name_orig=="Bonito, Pacific"|
                                               comm_name_orig=="Anchovy, northern"|
                                               comm_name_orig=="dolphin (fish)"|
