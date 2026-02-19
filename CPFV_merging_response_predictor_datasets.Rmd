@@ -12,7 +12,7 @@ Purpose of code: To merge predictor and response variable datasets for future GA
 *Predictor variables*-- 
 - PDO index
 - SST by block 
-- Chlorophyll a by block 
+- Chlorophyll a by block --> not including because doesn't span full time period, doesn't have full spatial extent, and has a gnarly distribution
 - Adjusted gas prices 
 
 Structural: Year (continuous, circular)
@@ -43,8 +43,8 @@ path_out="C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data"
 CPFV_pelagic <- readRDS("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CPFV_pelagic_species_subset.Rds")
 gas_adjusted_25<-read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/gas_adjusted2025.csv")
 PDO <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/PDO.csv")
-Monthly_mean_temp <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/SST_monthly_avg_CDFW_blocks_formatted.csv")
-Monthly_mean_chl_a <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Chl_a_monthly_avg_CDFW_blocks_formatted.csv")
+Monthly_mean_temp <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/SST_monthly_avg_by_block_final.csv")
+#Monthly_mean_chl_a <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Chl_a_monthly_avg_CDFW_blocks_formatted.csv")
 ```
 
 #CPFV- Removing columns don't need
@@ -52,7 +52,7 @@ Monthly_mean_chl_a <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_L
 glimpse(CPFV_pelagic)
 colnames(CPFV_pelagic)
 CPFV_pelagic_basic <- CPFV_pelagic %>%
-  select(c("logbook_id_use", "year", "month", "day", "species_type", "CPUE_p", "block_id"))
+  dplyr::select(c("logbook_id_use", "year", "month", "day", "species_type", "CPUE_p", "block_id"))
 ```
 
 #Ensuring uniform column names 
@@ -63,28 +63,28 @@ gas_adjusted_25_format<-gas_adjusted_25 %>%
          year = Year, 
          adjusted_gas_USD_25 = adjust_price
          ) %>%
-  select(month, year, adjusted_gas_USD_25)
+  dplyr::select(month, year, adjusted_gas_USD_25)
 
 #PDO
 PDO_format<-PDO %>%
   rename(month = Month, 
          year = Year
          ) %>%
-  select(month, year, PDO)
+  dplyr::select(month, year, PDO)
 
 #Temperature
 Monthly_mean_temp_format <-Monthly_mean_temp %>%
-  rename(avg_monthly_SST_C = MEAN, 
+  rename(avg_monthly_SST_C = avg_temp, 
          block_id = BLOCK10_ID
          ) %>%
-  select(month, year, block_id, avg_monthly_SST_C)
+ dplyr::select(month, year, block_id, avg_monthly_SST_C)
 
 #Chlorophyll-a
-Monthly_mean_chl_a_format <- Monthly_mean_chl_a %>%
-  rename(avg_monthly_Chl_a_mg_m3 = MEAN, 
-         block_id = BLOCK10_ID
-         ) %>%
-  select(month, year, block_id, avg_monthly_Chl_a_mg_m3)
+#Monthly_mean_chl_a_format <- Monthly_mean_chl_a %>%
+#  rename(avg_monthly_Chl_a_mg_m3 = MEAN, 
+#         block_id = BLOCK10_ID
+#         ) %>%
+#  dplyr::select(month, year, block_id, avg_monthly_Chl_a_mg_m3)
 ```
 
 
@@ -94,8 +94,58 @@ Monthly_mean_chl_a_format <- Monthly_mean_chl_a %>%
 CPFV_pelagics_predictors_merged <- CPFV_pelagic_basic %>%
   left_join(gas_adjusted_25_format, by= c("month", "year")) %>%
   left_join(PDO_format, by= c("month", "year")) %>%
-  left_join(Monthly_mean_temp_format, by= c("month", "year", "block_id")) %>%
-  left_join(Monthly_mean_chl_a_format, by= c("month", "year", "block_id")) 
+  left_join(Monthly_mean_temp_format, by= c("month", "year", "block_id")) 
+  #left_join(Monthly_mean_chl_a_format, by= c("month", "year", "block_id")) 
 ```
 
-ISSUE HERE! :( IT SEEMS LIKE THERE ISN'T A MATCHING BLOCK/YEAR/MONTH COMBO FOR LOTS OF TEMPERATURE AND CHL-A LINES IN THE DATAFRAME. SHOULD LOOK TO SEE THE # OF BLOCKS REPRESENTED AND MONTHS IN BOTH 
+#______________________________
+#QAQC
+######Getting some incorrect blocks 
+From Chris Free-- https://chrismfree.com/california-fisheries-data/ca-fishing-blocks/
+"The following blocks are nested within larger blocks:
+
+911 = 912, 913, 914
+921 = 922, 923, 924
+931 = 932, 933, 934
+941 = 942, 943, 944
+951 = 952, 953, 954, 955
+961 =962, 963, 964, 965
+967 = 966, 968, 969
+910 = all international blocks north of 27.5°N
+920 = all international blocks north of 22.0°N
+930 = all international blocks north of 16.25°N
+940 = all international blocks north of 7.5°N
+950 = all international blocks north of 2°S
+960 = all international blocks south of 2°S"
+
+```{r}
+CPFV_pelagics_predictors_merged_non_CA_blocks<- CPFV_pelagics_predictors_merged %>%
+  filter(block_id < 999 & block_id > 909)
+
+nrow(CPFV_pelagics_predictors_merged_non_CA_blocks)
+
+#250421 trips were out of the us or 25% 
+```
+
+###Removing International Trips 
+```{r}
+CPFV_pelagics_predictors_merged_US_only<- CPFV_pelagics_predictors_merged %>%
+  filter(block_id > 999 | block_id < 909)
+```
+
+###Checking for NAs
+```{r}
+na_summary <- CPFV_pelagics_predictors_merged_US_only %>%
+  summarise(
+    na_cpue = sum(is.na(CPUE_p)), 
+    na_temp = sum(is.na(CPFV_pelagics_predictors_merged_US_only$avg_monthly_SST_C)), 
+    na_gas= sum(is.na(adjusted_gas_USD_25)), 
+    na_pdo= sum(is.na(PDO)), 
+    na_block= sum(is.na(block_id))
+  )
+print(na_summary)
+```
+
+
+ISSUE HERE! :( still have a lot of Nas for temperature-- need to understand/figure out why
+Also need to dig deeper to understand why I would have NAs for cpue-- go back through cleaning code ------ again :(

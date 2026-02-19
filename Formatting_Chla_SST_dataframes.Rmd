@@ -21,6 +21,8 @@ library(sf)
 library(terra)
 #library(tidyterra)
 library(raster)
+library(colorspace)
+library(exactextractr)
 path_out="C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets"
 ```
 
@@ -28,7 +30,7 @@ path_out="C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/P
 ```{r}
 SST_monthly_avg_CA_raster <- rast("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/sst.mon.mean.nc")
 
-Chla_monthly_avg_CA_raster <- raster("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/Chl_A_V6_Plym_Marine_Lab_Ocean_Colour_97_20.nc")
+Chla_monthly_avg_CA_raster <- rast("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/Chl_A_V6_Plym_Marine_Lab_Ocean_Colour_97_21.nc")
 
 
 #Chl_a_monthly_avg_CDFW_blocks<-read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/Chl_a_CDFW_block_monthly_avg_mg_per_m3.csv")
@@ -39,8 +41,8 @@ SST_monthly_avg_CDFW_blocks<- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.
 
 CDFW_blocks<-st_read("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/CDFW_fishing_blocks/Commercial_Fishing_Blocks_-_R7_-_CDFW_[ds3093].shp")
 ```
-
-#Baseline understanding of Raster
+#______________
+#SST
 ###Summary attributes
 ```{r}
 SST_monthly_avg_CA_raster
@@ -57,7 +59,7 @@ SST_monthly_avg_CA_raster <-setMinMax(SST_monthly_avg_CA_raster) #adds max and m
 SST_monthly_avg_CA_raster
 ```
 
-##### Histogram of temperatures within Raster for QAQC
+##### Plot of temperatures within Raster for QAQC
 ```{r}
 plot(SST_monthly_avg_CA_raster, main="Distribution of SST (C)")
 ```
@@ -76,14 +78,14 @@ SST_monthly_avg_CA_raster_cropCA <-setMinMax(SST_monthly_avg_CA_raster_cropCA) #
 SST_monthly_avg_CA_raster_cropCA
 ```
 
-##### Histogram of temperatures within Raster for QAQC
+##### Plot of temperatures within Raster for QAQC
 ```{r}
 plot(SST_monthly_avg_CA_raster_cropCA, main="Distribution of SST (C)")
 ```
 
 
 #Overlaying CDFW Blocks
-#Ensuring same CRS 
+####Ensuring same CRS 
 ```{r}
 crs(SST_monthly_avg_CA_raster_cropCA)
 ```
@@ -91,7 +93,7 @@ crs(SST_monthly_avg_CA_raster_cropCA)
 ```{r}
 crs(CDFW_blocks) 
 ```
-
+###### Transforming CRS
 ```{r}
 CDFW_blocks_updatecrs <- CDFW_blocks%>%
   st_transform(crs(SST_monthly_avg_CA_raster_cropCA)) %>% #changing crs to match SST data
@@ -103,14 +105,296 @@ crs(CDFW_blocks_updatecrs) #checking crs to make sure updated
 
 ##Plotting overlay 
 ```{r}
-ext(SST_monthly_avg_CA_raster_cropCA_rotate)
-#SpatExtent : -180, 180, -90, 90 (xmin, xmax, ymin, ymax)
+ext(SST_monthly_avg_CA_raster_cropCA)
+#SpatExtent : -126, -117, 32, 42 (xmin, xmax, ymin, ymax)
 ext(CDFW_blocks_updatecrs)
 #SpatExtent : -125.667907632446, -117.097051415794, 32.3333873907098, 41.9998867422286 (xmin, xmax, ymin, ymax)
-plot(SST_monthly_avg_CA_raster_cropCA)
+plot(SST_monthly_avg_CA_raster_cropCA[[1]])
 plot(CDFW_blocks_updatecrs, border= "black", add= T)
 ```
 
+#Zonal Stats-- avg SST/block
+##Checking block dataframe as SpatVector
+```{r}
+CDFW_blocks_updatecrs
+#is a SpatVector-- geometry= pologyon, 546 geometries, 6 attributes, long/lat WGS84
+```
+
+##Running Zonal Statistics
+```{r}
+#turning CDFW 
+CDFW_blocks_asSF<-st_as_sf(CDFW_blocks_updatecrs)
+
+#putting time as the layer names
+names(SST_monthly_avg_CA_raster_cropCA) <- time(SST_monthly_avg_CA_raster_cropCA)
+
+#running zonal statistics
+exact_extractSST <- exact_extract(SST_monthly_avg_CA_raster_cropCA, 
+                                  CDFW_blocks_asSF, 
+                                  'mean', 
+                                  append_cols= "BLOCK10_ID")
+
+SST_monthly_avg_by_block_zonal_table <- exact_extractSST %>%
+  pivot_longer( #changes formatting so that all in one column 
+    cols = starts_with("mean"), 
+    names_to = "date", 
+    values_to = "avg_temp"
+  ) %>%
+  mutate(date= gsub("mean.", "", date))
+```
+
+####QAQC Zonal
+######Graphing
+```{r}
+plot(SST_monthly_avg_CA_raster_cropCA[[1]])
+plot(st_geometry(CDFW_blocks_asSF), add = TRUE, border = "black")
+```
+
+######Checking Values manual
+```{r}
+#pick a test block
+test_block_QAQC <- CDFW_blocks_asSF$BLOCK10_ID[102]
+single_block <- CDFW_blocks_asSF[CDFW_blocks_asSF$BLOCK10_ID== test_block_QAQC,]
+
+#Isolate raster data for block 
+test_QAQC_SST_raster <- crop(SST_monthly_avg_CA_raster_cropCA[[1]], single_block, mask=T)
+
+#Manually calculate weighted mean 
+test_QAQC_SST_raster_mean <- terra::global(test_QAQC_SST_raster, 
+                                           fun= "mean", 
+                                           na.rm= T)$mean
+#Compare to exact_extract results 
+test_QAQC_SST_raster_exactextract_mean <- SST_monthly_avg_by_block_zonal_table %>%
+  filter(BLOCK10_ID== test_block_QAQC) %>%
+  slice(1) %>%
+  pull(avg_temp)
+
+#Print comparison 
+cat("Manual Mean (Terra)", test_QAQC_SST_raster_mean, "\n")
+cat("Exact Extract Mean", test_QAQC_SST_raster_exactextract_mean, "\n")
+cat("Difference:     ", test_QAQC_SST_raster_mean - test_QAQC_SST_raster_exactextract_mean, "\n")
+### Huzzah! They match
+
+```
+
+##### Looking at Temperature Distribution
+```{r}
+hist(SST_monthly_avg_by_block_zonal_table$avg_temp)
+#slightly left skewed bell curve approximation
+```
+
+
+#####Finding NAs
+```{r}
+#finding NAs 
+na_blocks <- SST_monthly_avg_by_block_zonal_table %>%
+  filter(is.na(avg_temp))
+if(nrow(na_blocks) > 0) {
+  print("Warning: The following blocks have NA temperatures:")
+  print(unique(na_blocks$BLOCK10_ID))
+} else {
+  print("QAQC Pass: No NA values found in extraction.")
+}
+#Nas for 101, 301, 489, 678, 679, 680 
+# 101 in land at border-- no coverage
+# 301, 489 San Francisco bay-- no coverage
+# 678, 679, 680 along Malibu-- no coverage
+#488-- very little coverage but still including
+
+```
+
+###Removing NA  Blocks
+```{r}
+SST_monthly_avg_by_block_final <-SST_monthly_avg_by_block_zonal_table %>%
+  filter(!is.na(avg_temp)) %>%
+  filter(!is.nan(avg_temp)) %>%
+  mutate(
+    year= year(date), 
+    month= month(date)
+  )
+```
+
+#Export SST Data
+```{r}
+write.csv(SST_monthly_avg_by_block_final, file.path(path_out, "SST_monthly_avg_by_block_final.csv"))
+
+```
+
+#_________________
+#Chlorophyll- A
+PRE-SPATIALLY TRIMMED TO CA WATER BOUNDARIES 
+###Summary attributes
+```{r}
+Chla_monthly_avg_CA_raster
+#gives you raster attributes 
+#518 rows, 638 columns, 1960178 cells 
+#WGS84 projection 
+#resolution= 0.04166667, 0.04166667    (x, y)-- degrees
+#zvar= chlor_a; z-value= date
+##MUCH SMALLER THAN SST RASTER GRID SIZE
+```
+
+#####Max and Min Values 
+```{r}
+Chla_monthly_avg_CA_raster <-setMinMax(Chla_monthly_avg_CA_raster) #adds max and min to attributes 
+Chla_monthly_avg_CA_raster
+```
+
+##### Graph of temperatures within Raster for QAQC
+```{r}
+
+chla_viz<- Chla_monthly_avg_CA_raster[[1]] %>%
+  clamp(lower=0, upper=5, values=T)
+
+terra::plot(chla_viz, main="Distribution of Chl-a (mg/m3)")
+```
+
+#Overlaying CDFW Blocks
+####Ensuring same CRS 
+```{r}
+crs(Chla_monthly_avg_CA_raster)
+```
+
+```{r}
+crs(CDFW_blocks) 
+```
+###### Transforming CRS
+```{r}
+CDFW_blocks_updatecrs_chla <- CDFW_blocks%>%
+  st_transform(crs(Chla_monthly_avg_CA_raster)) %>% #changing crs to match SST data
+  vect() #turning into a terra spatial vector 
+
+CDFW_blocks_updatecrs_chla
+crs(CDFW_blocks_updatecrs_chla) #checking crs to make sure updated 
+```
+
+##Plotting overlay 
+```{r}
+ext(Chla_monthly_avg_CA_raster)
+#SpatExtent : -137.666666666667, -111.083333333333, 25.5833333333333, 47.1666666666667 (xmin, xmax, ymin, ymax)
+ext(CDFW_blocks_updatecrs_chla)
+#SpatExtent : -125.667907632446, -117.097051415794, 32.3333873907098, 41.9998867422286 (xmin, xmax, ymin, ymax)
+
+
+terra::plot(chla_viz, main="Distribution of Chl-a (mg/m3)") #same manually clamped values for first layer as before
+terra::plot(CDFW_blocks_updatecrs_chla, add= T)
+
+```
+
+#Zonal Stats-- avg SST/block
+##Checking block dataframe as SpatVector
+```{r}
+CDFW_blocks_updatecrs_chla
+#is a SpatVector-- geometry= pologyon, 546 geometries, 6 attributes, long/lat WGS84
+```
+
+##Running Zonal Statistics
+```{r}
+#turning CDFW 
+CDFW_blocks_updatecrs_chla_asSF<-st_as_sf(CDFW_blocks_updatecrs_chla)
+
+#putting time as the layer names
+names(Chla_monthly_avg_CA_raster) <- time(Chla_monthly_avg_CA_raster)
+
+#running zonal statistics
+exact_extract_chla <- exact_extract(Chla_monthly_avg_CA_raster, 
+                                  CDFW_blocks_updatecrs_chla_asSF, 
+                                  'mean', 
+                                  append_cols= "BLOCK10_ID")
+
+Chla_monthly_avg_by_block_zonal_table <- exact_extract_chla %>%
+  pivot_longer( #changes formatting so that all in one column 
+    cols = starts_with("mean"), 
+    names_to = "date", 
+    values_to = "avg_temp"
+  ) %>%
+  mutate(date= gsub("mean.", "", date))
+```
+
+####QAQC Zonal
+######Graphing
+```{r}
+plot(Chla_monthly_avg_CA_raster[[1]])
+plot(st_geometry(CDFW_blocks_updatecrs_chla_asSF), add = TRUE, border = "black")
+```
+
+######Checking Values manual
+```{r}
+#pick a test block
+test_block_QAQC_chla <- CDFW_blocks_updatecrs_chla_asSF$BLOCK10_ID[102]
+single_block_chla <- CDFW_blocks_updatecrs_chla_asSF[CDFW_blocks_updatecrs_chla_asSF$BLOCK10_ID== test_block_QAQC_chla,]
+
+#Isolate raster data for block 
+test_QAQC_SST_raster_chla <- crop(Chla_monthly_avg_CA_raster[[1]], single_block_chla, mask=T)
+
+#Manually calculate weighted mean 
+test_QAQC_SST_raster_chla_mean <- terra::global(test_QAQC_SST_raster_chla, 
+                                           fun= "mean", 
+                                           na.rm= T)$mean
+#Compare to exact_extract results 
+test_QAQC_SST_raster_exactextract_mean_chla <- Chla_monthly_avg_by_block_zonal_table %>%
+  filter(BLOCK10_ID== test_block_QAQC_chla) %>%
+  slice(1) %>%
+  pull(avg_temp)
+
+#Print comparison 
+cat("Manual Mean (Terra)", test_QAQC_SST_raster_chla_mean, "\n")
+cat("Exact Extract Mean", test_QAQC_SST_raster_exactextract_mean_chla, "\n")
+cat("Difference:     ", test_QAQC_SST_raster_chla_mean - test_QAQC_SST_raster_exactextract_mean_chla, "\n")
+### Huzzah! They match
+
+```
+
+##### Looking at Temperature Distribution
+```{r}
+hist(Chla_monthly_avg_by_block_zonal_table$avg_temp)
+#slightly left skewed bell curve approximation
+```
+
+
+#####Finding NAs
+```{r}
+#finding NAs 
+na_blocks_chla <- Chla_monthly_avg_by_block_zonal_table %>%
+  filter(is.na(avg_temp))
+if(nrow(na_blocks_chla) > 0) {
+  print("Warning: The following blocks have NA temperatures:")
+  print(unique(na_blocks_chla$BLOCK10_ID))
+} else {
+  print("QAQC Pass: No NA values found in extraction.")
+}
+#Nas for 101 102 103 107 108 113 114 115 120 126 132 201 208 209 210 216 222 227 262 268 301 401 430 507 516
+#525 528 542 550 551 552 557 558 559 565 566 567 663 677 678 694 695 696 717 732 735 736 753 755 775
+# 776 777 838 839 858 859 876
+
+# 101 in land at border-- no coverage
+# 301, 489 San Francisco bay-- no coverage
+# 678, 679, 680 along Malibu-- no coverage
+#488-- very little coverage but still including
+
+```
+
+###Removing NA  Blocks
+```{r}
+SST_monthly_avg_by_block_final <-SST_monthly_avg_by_block_zonal_table %>%
+  filter(!is.na(avg_temp)) %>%
+  filter(!is.nan(avg_temp)) %>%
+  mutate(
+    year= year(date), 
+    month= month(date)
+  )
+```
+
+#Export SST Data
+```{r}
+write.csv(SST_monthly_avg_by_block_final, file.path(path_out, "SST_monthly_avg_by_block_final.csv"))
+
+```
+
+
+
+
+#_________________
 
 Ensure same CRS system
 ```{r}
