@@ -1,0 +1,40 @@
+---
+title: "PDO_txt_csv"
+author: "Van Deusen"
+date: "2026-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(tidyr)
+library(dplyr)
+path_out= "C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets"
+```
+
+## Importing data
+```{r cars}
+PDO_txt<- read_table("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/ersst.v5.pdo.dat.txt", skip=1)
+```
+
+##Changing from Horizontal to Long format
+```{r}
+pdo_long <- PDO_txt %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "Month_Name", 
+    values_to = "PDO"
+  ) %>%
+  mutate(
+    # Convert month names (Jan, Feb) into numbers (1, 2) to match your Gas/CPI data
+    Month = match(Month_Name, month.abb),
+    Year = as.numeric(Year)
+  ) %>%
+  select(Year, Month, PDO)
+```
+
+##Exporting
+```{r}
+write.csv(pdo_long,file.path(path_out, "PDO.csv"))
+```
+

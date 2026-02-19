@@ -1,0 +1,101 @@
+---
+title: "CPFV_merging_response_predictor_datasets"
+author: "Van Deusen"
+date: "2026-02-02"
+output: html_document
+---
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
+PI: Jenny Selgrath
+Purpose of code: To merge predictor and response variable datasets for future GAM 
+
+*Response variable*-- # fish caught/# fishers/day
+*Predictor variables*-- 
+- PDO index
+- SST by block 
+- Chlorophyll a by block 
+- Adjusted gas prices 
+
+Structural: Year (continuous, circular)
+Environmental: Sea Surface Temperature (continuous); Marine Heat Wave Index (continuous); Pacific Decadal Oscillation (continuous)
+Economic: Gas prices (continuous)
+______________
+data input: 
+_______________
+Graph output:  
+
+#Inital setup
+## Loading libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+path_out="C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data"
+``` 
+
+##Importing Data
+```{r}
+CPFV_pelagic <- readRDS("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CPFV_pelagic_species_subset.Rds")
+gas_adjusted_25<-read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/gas_adjusted2025.csv")
+PDO <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/PDO.csv")
+Monthly_mean_temp <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/SST_monthly_avg_CDFW_blocks_formatted.csv")
+Monthly_mean_chl_a <- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Chl_a_monthly_avg_CDFW_blocks_formatted.csv")
+```
+
+#CPFV- Removing columns don't need
+```{r}
+glimpse(CPFV_pelagic)
+colnames(CPFV_pelagic)
+CPFV_pelagic_basic <- CPFV_pelagic %>%
+  select(c("logbook_id_use", "year", "month", "day", "species_type", "CPUE_p", "block_id"))
+```
+
+#Ensuring uniform column names 
+```{r}
+#Gas Prices
+gas_adjusted_25_format<-gas_adjusted_25 %>%
+  rename(month = Month, 
+         year = Year, 
+         adjusted_gas_USD_25 = adjust_price
+         ) %>%
+  select(month, year, adjusted_gas_USD_25)
+
+#PDO
+PDO_format<-PDO %>%
+  rename(month = Month, 
+         year = Year
+         ) %>%
+  select(month, year, PDO)
+
+#Temperature
+Monthly_mean_temp_format <-Monthly_mean_temp %>%
+  rename(avg_monthly_SST_C = MEAN, 
+         block_id = BLOCK10_ID
+         ) %>%
+  select(month, year, block_id, avg_monthly_SST_C)
+
+#Chlorophyll-a
+Monthly_mean_chl_a_format <- Monthly_mean_chl_a %>%
+  rename(avg_monthly_Chl_a_mg_m3 = MEAN, 
+         block_id = BLOCK10_ID
+         ) %>%
+  select(month, year, block_id, avg_monthly_Chl_a_mg_m3)
+```
+
+
+# Merging Dataframes 
+```{r}
+#left join, one to many relationship 
+CPFV_pelagics_predictors_merged <- CPFV_pelagic_basic %>%
+  left_join(gas_adjusted_25_format, by= c("month", "year")) %>%
+  left_join(PDO_format, by= c("month", "year")) %>%
+  left_join(Monthly_mean_temp_format, by= c("month", "year", "block_id")) %>%
+  left_join(Monthly_mean_chl_a_format, by= c("month", "year", "block_id")) 
+```
+
+ISSUE HERE! :( IT SEEMS LIKE THERE ISN'T A MATCHING BLOCK/YEAR/MONTH COMBO FOR LOTS OF TEMPERATURE AND CHL-A LINES IN THE DATAFRAME. SHOULD LOOK TO SEE THE # OF BLOCKS REPRESENTED AND MONTHS IN BOTH 

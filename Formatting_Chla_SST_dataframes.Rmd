@@ -1,0 +1,205 @@
+---
+title: "Formatting_Chla_SST_dataframes"
+author: "Van Deusen"
+date: "2026-02-17"
+output: html_document
+---
+
+#Inital setup
+## Loading libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(FishLife)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(terra)
+#library(tidyterra)
+library(raster)
+path_out="C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets"
+```
+
+##Importing Data
+```{r}
+SST_monthly_avg_CA_raster <- rast("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/sst.mon.mean.nc")
+
+Chla_monthly_avg_CA_raster <- raster("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/Chl_A_V6_Plym_Marine_Lab_Ocean_Colour_97_20.nc")
+
+
+#Chl_a_monthly_avg_CDFW_blocks<-read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/Chl_a_CDFW_block_monthly_avg_mg_per_m3.csv")
+# avg mg/m3
+
+SST_monthly_avg_CDFW_blocks<- read.csv("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Predictor_Datasets/Raw/sst_monthly_blocks_small_interp.csv")
+# avg degrees C
+
+CDFW_blocks<-st_read("C:/Users/vanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/CDFW_fishing_blocks/Commercial_Fishing_Blocks_-_R7_-_CDFW_[ds3093].shp")
+```
+
+#Baseline understanding of Raster
+###Summary attributes
+```{r}
+SST_monthly_avg_CA_raster
+#gives you raster attributes 
+#720 rows, 1440 columns, 1036800 cells 
+#WGS84 projection 
+#zvar= sst; z-value= 1981-09-01
+#resolution= 0.25, 0.25  (x, y)-- degrees
+```
+
+#####Max and Min Values 
+```{r}
+SST_monthly_avg_CA_raster <-setMinMax(SST_monthly_avg_CA_raster) #adds max and min to attributes 
+SST_monthly_avg_CA_raster
+```
+
+##### Histogram of temperatures within Raster for QAQC
+```{r}
+plot(SST_monthly_avg_CA_raster, main="Distribution of SST (C)")
+```
+
+## Trimming Raster Spatial Extent 
+```{r}
+SST_monthly_avg_CA_raster_rotate <-rotate(SST_monthly_avg_CA_raster)
+plot(SST_monthly_avg_CA_raster_rotate)
+cropbox_CA <- extent(-126, -117, 32, 42)
+SST_monthly_avg_CA_raster_cropCA <- crop(SST_monthly_avg_CA_raster_rotate, cropbox_CA)
+```
+
+#####Max and Min Values 
+```{r}
+SST_monthly_avg_CA_raster_cropCA <-setMinMax(SST_monthly_avg_CA_raster_cropCA) #adds max and min to attributes 
+SST_monthly_avg_CA_raster_cropCA
+```
+
+##### Histogram of temperatures within Raster for QAQC
+```{r}
+plot(SST_monthly_avg_CA_raster_cropCA, main="Distribution of SST (C)")
+```
+
+
+#Overlaying CDFW Blocks
+#Ensuring same CRS 
+```{r}
+crs(SST_monthly_avg_CA_raster_cropCA)
+```
+
+```{r}
+crs(CDFW_blocks) 
+```
+
+```{r}
+CDFW_blocks_updatecrs <- CDFW_blocks%>%
+  st_transform(crs(SST_monthly_avg_CA_raster_cropCA)) %>% #changing crs to match SST data
+  vect() #turning into a terra spatial vector 
+
+CDFW_blocks_updatecrs
+crs(CDFW_blocks_updatecrs) #checking crs to make sure updated 
+```
+
+##Plotting overlay 
+```{r}
+ext(SST_monthly_avg_CA_raster_cropCA_rotate)
+#SpatExtent : -180, 180, -90, 90 (xmin, xmax, ymin, ymax)
+ext(CDFW_blocks_updatecrs)
+#SpatExtent : -125.667907632446, -117.097051415794, 32.3333873907098, 41.9998867422286 (xmin, xmax, ymin, ymax)
+plot(SST_monthly_avg_CA_raster_cropCA)
+plot(CDFW_blocks_updatecrs, border= "black", add= T)
+```
+
+
+Ensure same CRS system
+```{r}
+#check CRS system of SST Raster 
+terra::crs(SST_monthly_avg_CA_raster)
+```
+
+
+
+#Formatting Temp and Chl-a
+## Checking column coding 
+```{r}
+#Reformatting block_id for Chl-a
+Monthly_mean_chl_a_format<- Chl_a_monthly_avg_CDFW_blocks %>%
+  mutate(block_id= as.numeric(as.character(Monthly_mean_chl_a$BLOCK10_ID))) %>%
+  select(-BLOCK10_ID)
+
+#Reformatting block_id for temp
+Monthly_mean_temp_format<- SST_monthly_avg_CDFW_blocks %>%
+  mutate(block_id= as.numeric(as.character(Monthly_mean_temp$BLOCK10_ID))) %>%
+  select(-BLOCK10_ID)
+
+##Reformatting CDFW blocks and colnames
+CDFW_blocks_format <- CDFW_blocks %>%
+  mutate(block_id= as.numeric(as.character(CDFW_blocks$BLOCK10_ID))) %>%
+  select(- BLOCK10_ID)
+
+```
+
+
+#Block Skeleton
+```{r}
+block_skeleton <- expand_grid(
+  block_id = unique(CDFW_blocks_format$block_id), 
+  year= 1980:2020, 
+  month= 1:12
+)
+```
+
+
+##SST
+```{r}
+SST_monthly_avg_CDFW_blocks_formatted <- Monthly_mean_temp_format %>%
+  mutate(StdTime = mdy_hms(StdTime), #converts to POSIXct format
+         month= month(StdTime), 
+         year= year(StdTime), 
+         ) 
+```
+
+##Join SST Data to Skeleton to Understand Gaps
+```{r}
+SST_monthly_avg_CDFW_blocks_complete <- block_skeleton %>%
+  left_join(SST_monthly_avg_CDFW_blocks_formatted, by= c("block_id", "month", "year"))
+
+#unique missing blocks 
+na_SST_monthly <- SST_monthly_avg_CDFW_blocks_complete %>%
+  group_by(block_id, month) %>%
+  summarise(
+    na_count = sum(is.na(MEAN)),
+    .groups = "drop"
+  ) %>% 
+  #filtering out when NA is 41 
+  filter(na_count== 41) %>%
+  group_by(block_id) %>%
+  summarise(
+    missing_month_count = n(),
+    .groups = "drop"
+  ) %>%
+  # Final filter: only keep blocks that have all 12 months missing
+  filter(missing_month_count == 12)
+  #here, when there are 41 instances of NA across 12 months, it means that that block is never represented in the data 
+
+```
+
+
+#####Exporting 
+```{r}
+write.csv(SST_monthly_avg_CDFW_blocks_formatted, file.path(path_out, "SST_monthly_avg_CDFW_blocks_formatted.csv"))
+```
+
+##Chl_a
+```{r}
+Chl_a_monthly_avg_CDFW_blocks_formatted <- Chl_a_monthly_avg_CDFW_blocks %>%
+  mutate(StdTime = mdy_hms(StdTime), #converts to POSIXct format
+         month= month(StdTime), 
+         year= year(StdTime)) 
+```
+
+#####Exporting 
+```{r}
+write.csv(Chl_a_monthly_avg_CDFW_blocks_formatted, file.path(path_out, "Chl_a_monthly_avg_CDFW_blocks_formatted.csv"))
+```

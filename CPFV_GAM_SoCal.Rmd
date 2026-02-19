@@ -1,0 +1,53 @@
+---
+title: "CPFV_GAM_SoCal"
+author: "Van Deusen"
+date: "2026-01-21"
+output: html_document
+---
+project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
+PI: Jenny Selgrath
+Purpose of code: to create a generalized additive model (GAM) to determine how the number of fish caught per fisher (CPUE) is effected by temperature, gas prices, year, and MPA designation 
+
+~~It seems to me like it is easiest to fit a GAM for each species, so that species doesn't have to be a consideration within the GAM itself
+
+*Response variable*-- number of fish caught per fisher 
+*Predictor variables*-- 
+Structural: Year (continuous, circular)
+Environmental: Sea Surface Temperature (continuous); Marine Heat Wave Index (continuous); Pacific Decadal Oscillation (continuous)
+Economic: Gas prices (continuous)
+______________
+data input: 
+_______________
+Graph output:  
+_______________
+## Loading libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(freeR)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(lubridate)
+library(sf)
+library(tidyr)
+library(quantmod) 
+library(OneR)
+library(mgcv)
+library(nlme)
+path_out="C:/Usersvanessa.van.deusen/Desktop/Van.Deusen_Local/CPFV_local/Data/Model_outputs"
+
+```
+
+##Importing data 
+```{r}
+fishperfisher <- readRDS()
+
+
+
+```
+
+
+
+
