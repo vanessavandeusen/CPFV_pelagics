@@ -7,7 +7,7 @@ output: html_document
 project: 2023 cpfv rec fishing and pelagics re: response to letters as part of MPA review
 PI: Jenny Selgrath
 ________________________________________________
-Data input: cpfv_merged_no_pii.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
+Data input: cpfv_merged_uniqueID.csv; blocks.csv; MFDE_port_historic.csv; MFDE_Species_historic.csv
 ----------
 see read.me file in Data and Bin folders for more information about data and code. Code adapted/pulled from existing code provided by Chris Free (UCSB) via email on 10/2/2023
 _________________________________________________
@@ -23,6 +23,7 @@ library(FishLife)
 library(freeR)
 library(dplyr)
 library(janitor)
+library(hms)
 library(ggplot2)
 library(lubridate)
 path_out="\\\\10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data"
@@ -41,8 +42,14 @@ blocks <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pe
 port_DF <- read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_port_historic.csv")
 ###Column names: "Port Area"        "Port Name"        "Port Code"        "Discontinue Date" "...5"
 
-species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/MFDE_Species_historic.csv")
+species_DF<-read_csv("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/Cleaning_Keys/CDFW_species_key_Free_2.26.csv")
 ###Column names: "Species Name"     "Species ID"       "Species Group"    "CCL Category"     "Discontinue Date" "...6"
+
+
+
+#____________________
+#Importing data_clean.RDS to run final subsetting code section-- NOT possible/necessary when running initally
+data_clean <- readRDS("//10.74.13.28/ci-users/Vanessa.Van.Deusen/R_projects/CPFV_pelagics/Data/CDFW_1980_2020_cpfv_logbook_data.Rds")
 ```
 
 ## Creating key data
@@ -60,34 +67,95 @@ port_key<- port_DF %>%
   clean_names("snake")%>%
   rename(port= port_name, 
          port_complex= port_area)%>%
-  select(-c(x5))
+  dplyr::dplyr::select(-c(x5))
 
 
 species_key<-species_DF %>% 
   clean_names("snake") %>%
-  rename("species_code"= "species_id", 
-         "species_discontinue_date"= "discontinue_date")%>% 
-  select(-c(x6))%>%
+  rename("species_code"= "spp_code_chr", 
+         "species_discontinue_date"= "discontinue_date", 
+         "species_name"= "sci_name")%>% 
+  dplyr::dplyr::select(-c("spp_code_num"))%>%
   mutate(species_code = as.numeric(species_code))
 ```
 
 
 #-----
+####Number of Nas
+```{r}
+na_summary_cpfv_raw <- cpfv_merged_uniqueID %>%
+  summarise(
+    na_PortCode = sum(is.na(PortCode)), 
+    na_HoursFished= sum(is.na(HoursFished)),
+    na_Depth= sum(is.na(Depth)), 
+    na_NumberReleased= sum(is.na(NumberReleased)), 
+    na_NumberOfCrewFished= sum(is.na(NumberOfCrewFished)), 
+    na_Block= sum(is.na(Block)),
+    na_Species = sum(is.na(Species )),
+    na_NumberOfFishers= sum(is.na(NumberOfFishers)),
+    na_NumberKept= sum(is.na(NumberKept)),
+    na_id_vessel = sum(is.na(id_vessel)),
+    na_HoursMinutesFished = sum(is.na(HoursMinutesFished)),
+    na_year = sum(is.na(day)),
+    na_SpeciesCode= sum(is.na(SpeciesCode))
+  )
+View(na_summary_cpfv_raw)
+```
+
+```{r}
+sum(is.na(cpfv_merged_uniqueID$HoursFished))
+#13,707--0.3% of trips
+
+sum(is.na(cpfv_merged_uniqueID$HoursFished) & is.na(cpfv_merged_uniqueID$HoursMinutesFished))
+#10,949
+
+sum(is.na(cpfv_merged_uniqueID$HoursMinutesFished))
+#10949-- Seems like should use this one 
+
+hist(cpfv_merged_uniqueID$HoursFished)
+```
+##Looking to see what may pose problems when ensuring numeric values are in numeric format
+```{r}
+cols_to_check <- c("LogMonth", "LogYear", "PortCode", "Block", "Depth", "Temperature", 
+                   "NumberOfFishers", "NumberOfFishCaughtByCrew", "NumberOfCrewFished", "HoursFished", 
+                   "NumberKept", "NumberReleased", "SpeciesCode")
+
+# 2. Re-run the loop with the fix
+for (col in cols_to_check) {
+  
+  # Use .data[[col]] to force R to look at the column, not the function
+  offenders <- cpfv_merged_uniqueID %>%
+    filter(!is.na(.data[[col]])) %>%
+    filter(is.na(as.numeric(as.character(.data[[col]])))) %>%
+    distinct(.data[[col]]) %>%
+    pull(.data[[col]])
+  
+  if (length(offenders) > 0) {
+    cat("\n--- Problem values in column:", col, "---\n")
+    print(offenders)
+  } else {
+    cat("\nColumn", col, "is clean.\n")
+  }
+}
+#issue is oarfish (1/8)
+```
+
+
 #Demographics on species, methods, and bait (dataset from 1980-2020)
 ## Which species groups are most frequently targeted by recreational fishers?
 ```{r}
-target_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(TargetSpeciesLingcod:TargetSpeciesMiscBay))))
+target_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% dplyr::select(TargetSpeciesLingcod:TargetSpeciesMiscBay))))
 head(target_n)
 ```
 
 ## Which fishing method is most frequently used by recreational fishers?
 ```{r}
-method_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(FishingMethodTrolling:FishingMethodOther))))
+method_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% dplyr::select(FishingMethodTrolling:FishingMethodOther))))
 head(method_n)
 ```
 ## Which bait is most frequently used by recreational fishers?
 ```{r}
-bait_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% select(BaitUsedAnchoviesLive:BaitUsedOtherDead))))
+bait_n <- rev(sort(nrow(cpfv_merged_uniqueID)-freeR::complete(cpfv_merged_uniqueID %>% dplyr::select(BaitUsedAnchoviesLive:BaitUsedOtherDead))))
 head(bait_n)
 ```
 
@@ -153,6 +221,7 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
     depth_ft=                 depth,
     n_fishers=                number_of_fishers,
     hrs_fished=               hours_fished,
+    hm_fished=                hours_minutes_fished,
     n_kept=                   number_kept,
     n_released=               number_released,
     n_lost_to_sea_lions=      number_lost_to_sea_lions,
@@ -161,13 +230,13 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
     ) %>% 
   # Step 1.2: Ensuring that date/time and count columns are in the correct format 
   mutate(
-    #Convert characters to Date objects
+    #Convert characters to Date and time objects
     date=              lubridate::mdy(date),
     date_received=     lubridate::mdy(date_received),
     date_submitted=    lubridate::mdy(date_submitted), 
     #Ensure number columns are coded as numeric
     across(.cols= c(month, year, port_code, block_id, depth_ft, temp_f, n_fishers, n_caught_by_crew, 
-               n_crew_fished, hrs_fished, n_kept, n_released, hrs_fished, hm_fished, species_code),
+               n_crew_fished, hrs_fished, n_kept, n_released, species_code),
            .fns= as.numeric), 
     across(.cols= c(n_kept, n_caught_by_crew, n_crew_fished, n_fishers, n_released), 
            .fns= ~replace_na(.x, 0))
@@ -184,11 +253,11 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
   mutate(port= ifelse(is.na(port), "Invalid", port), #returns "Invalid" if there is an NA here
     ) %>%
   left_join(block_key %>% 
-              select("block_id", "block_areaMi", "block_Acres"), 
+              dplyr::select("block_id", "block_areaMi", "block_Acres"), 
             by="block_id") %>%
   
-  # Step 5: Species Key Joins 
-  left_join(species_key %>% select(species_code, species_name, species_group, species_discontinue_date), 
+  # Step 5: Species Key Joins -- inner key removes entry that doesn't have a valid species code
+  inner_join(species_key %>% dplyr::select(species_code, species_name, species_discontinue_date), 
             by=c("species_code")) %>%
 #___Consolidating Columns______________________   
 # Step 3.1: Consolidating Col
@@ -234,20 +303,23 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
      sep = ", ") %>%
     mutate(across(c(target_species, fishing_method, bait_used), #Removes the NAs within the string 
                   ~gsub("NA, |, NA", "", .x))) %>%
-    
+#___Removing Nas and Non-match Codes_______________________________
+# Step 4.1 Removing Entries that Don't Match at Species Key
+  filter(!is.na(hm_fished)) %>% #remove entries that don't have a time component
+      
 #___Consolidating Columns______________________   
-# Step 4.1: Cacluating total fishers, total catch, and days fished 
+# Step 5.1: Calculating total fishers, total catch, and days fished 
   mutate(
     total_caught= abs(n_kept+ n_released),
     total_fishers= abs(n_fishers + n_crew_fished),
     days_fished= hrs_fished/24
   ) %>%
   
-# Step 4.2: ID generation and column re-ordering  
+# Step 5.2: ID generation and column re-ordering  
   mutate(ID= row_number(), 
          logbook_id_use = paste(ID, date, id_vessel, sep="-")
          )%>%
-  select(logbook_id_use, 
+  dplyr::select(logbook_id_use, 
          year, month, day, total_caught, total_fishers, days_fished, 
          date, date_submitted, date_received,
          port_complex, port_code, port,
@@ -262,6 +334,38 @@ table(cpfv_merged_no_pii$BaitUsedSquidLive)
          everything())
 
 ```
+Na introduced by coercion-- because oarfish 1/8 is entered in one row
+#********************
+##### :( STUCK HERE-- HM_FISHED IS STILL CODING AS A NUMBER RATHER THAN STAYING A TIME, NEED TO CHANGE HOW CALCULATE DAYS FISHED 
+#******************
+####QAQC
+```{r}
+missing_species <- data_clean %>%
+  anti_join(species_key, by = "species_code") %>%
+  distinct(species_code) #
+View(missing_species)
+
+
+na_summary_data_clean <- data_clean %>%
+  summarise(
+    na_species_name = sum(is.na(species_name)), 
+    na_species_code= sum(is.na(species_code)),
+    na_id_vessel= sum(is.na(id_vessel)), 
+    na_n_released= sum(is.na(n_released)), 
+    na_n_kept= sum(is.na(n_kept)), 
+    na_hrs_fished= sum(is.na(hrs_fished)),
+    na_hm_fished = sum(is.na(hm_fished )),
+    na_total_fisher= sum(is.na(total_fishers)),
+    na_total_caught= sum(is.na(total_caught)),
+    na_year = sum(is.na(year)),
+    na_year = sum(is.na(month)),
+    na_year = sum(is.na(day)),
+    na_hrs_and_hm= sum(is.na(hrs_fished) & is.na(hm_fished)), 
+    na_species_name_and_code= sum(is.na(species_code) & is.na(species_name))
+  )
+View(na_summary_data_clean)
+```
+
 
 #Inspect Data
 ```{r}
@@ -285,25 +389,25 @@ range(data_clean$temp_f, na.rm=T) #there are some temperatures which are entered
 
 # Ports
 port_key_check <- data_clean %>% 
-  select(port_complex, port_code, port) %>% 
+  dplyr::select(port_complex, port_code, port) %>% 
   unique() %>% 
   arrange(port_code)
 
 port_invalid<-data_clean%>%
   subset(port=="Invalid")%>%
-  select(port_complex, port_code, port)%>%
+  dplyr::select(port_complex, port_code, port)%>%
   unique()%>%
   arrange(port_code)
 #write.csv(port_invalid_full, file.path(path_out, "port_invalid_full.csv"))
 
 # Block
 block_key_check <- data_clean %>% 
-  select(block_id) %>% 
+  dplyr::select(block_id) %>% 
   unique()
 sort(block_key_check$block_id[is.na(block_key_check$block_type)])
 blocks_wrong<-data_clean%>%
   subset(block_id>897)%>%
-  select(block_id, year)%>%
+  dplyr::select(block_id, year)%>%
   unique()%>%
   arrange(block_id)
 #write.csv(blocks_wrong, file.path(path_out, "blocks_wrong.csv"))
@@ -325,18 +429,18 @@ table(data_clean$bird_interaction) # B, N, Y
 sort(unique(data_clean$species_code))
 sort(unique(data_clean$species_name))
 species_key_check <- data_clean %>% 
-  select(species_code,species_name, comm_name_orig) %>% 
+  dplyr::select(species_code,species_name, comm_name_orig) %>% 
   unique()
 sort(species_key_check$species_code[is.na(species_key_check$species_name)])
 
 species_name_missing<-data_clean%>%
   subset(is.na(data_clean$species_name))%>%
-  select(species_code, species_name, comm_name_orig) %>%
+  dplyr::select(species_code, species_name, comm_name_orig) %>%
  # unique()%>%
   arrange(species_code)
 ###comparing species names to comm_name_orig
 species_key_check_against<-data_clean%>%
-  select(species)
+  dplyr::select(species)
 
 ###break down of missing species names 
 table(species_name_missing$comm_name_orig)
@@ -370,7 +474,7 @@ freeR::uniq(data_clean$hm_fished)
 
 # Inspect duration
 duration_key <- data_clean %>% 
-  select(hm_fished, hrs_fished) %>% 
+  dplyr::select(hm_fished, hrs_fished) %>% 
   unique() %>% 
   arrange(hrs_fished)
 #Dont understand what is purpose of below
@@ -396,6 +500,28 @@ saveRDS(data_clean, file.path(path_out, "CDFW_1980_2020_cpfv_logbook_data.Rds"))
 ```
 
 #------
+#Subset to US Blocks 
+
+835 on-shore and off-shore blocks are located between California to Washington, 546 of those blocks are nearshore California. 29 international blocks extend down the coast of the Americas
+##### Creating block trim list 
+```{r}
+CA_nearshore_blocks <- pull(blocks, var= BLOCK10_ID)
+```
+
+#####Trimming
+```{r}
+data_clean_CA_nearshore <- data_clean %>%
+  filter(block_id %in% CA_nearshore_blocks)
+```
+
+#####QAQC
+```{r}
+length(unique(data_clean_CA_nearshore$block_id))
+#545
+```
+
+
+#------
 #Subset for Pelagics 
 
 Pelagic species: From Kacy CCA response notes-- "Condition report definition for coastal pelagic and HMF: California barracuda, Pacific bonito, white sea bass, yellowtail, albacore, blue shark, jack mackerel, northern, anchovy, opah, Pacific mackerel, Pacific northern bluefin tuna, Pacific sardine, shortfin mako shark, skipjack tuna, striped marlin, swordfish, thresher shark, white shark, and yellowfin tuna. "
@@ -405,11 +531,11 @@ Pelagic species: From Kacy CCA response notes-- "Condition report definition for
 Barracuda, California; Bonito, Pacific; Anchovy, northern; **dolphin (fish)**; Mackerel, jack; Mackerel, Pacific;  Marlin, striped; Mackerel, unspecified; Opah; Seabass, white; Shark, blue;Shark, shortfin mako; Shark, thresher; Tuna, albacore; Tuna, bluefin; Tuna, skipjack; Tuna, skipjack, black; Tuna, unspecified ; Tuna, yellowfin; Yellowtail; Sardine, Pacific; Swordfish; Shark, pelagic thresher; Shark, white; Swordfish
 
 swordfish is not within subset of data 
-###Selecting pelagics species 
+###dplyr::selecting pelagics species 
 ```{r}
 pelagic_species <- c("Barracuda, California","Bonito, Pacific", "Anchovy, northern", "dolphin (fish)", "Mackerel, jack", "Mackerel, Pacific", "Marlin, striped", "Mackerel, unspecified", "Opah", "Seabass, white", "Shark, blue", "Shark, shortfin mako", "Shark, thresher", "Tuna, albacore", "Tuna, bluefin", "Tuna, skipjack", "Tuna, skipjack, black", "Tuna, unspecified", "Tuna, yellowfin", "Yellowtail", "Sardine, Pacific", "Shark, pelagic thresher", "Shark, white", "Swordfish")
 
-CPFV_pelagic_subset<- data_clean %>%
+CPFV_pelagic_subset<- data_clean_CA_nearshore %>%
   filter(comm_name_orig %in% pelagic_species) %>% #filter out pelagic species
   filter(!is.na(n_fishers), n_fishers !=0) %>% #filter out when there is no recorded number of fishers
   #Categorize species
@@ -436,9 +562,47 @@ CPFV_pelagic_subset<- data_clean %>%
     ),
     #Calculate effort and CPUE
     CPUE_p = ((total_caught/total_fishers)/days_fished)
+  ) %>%
+  dplyr::dplyr::select(
+    "logbook_id_use", "year", "month", "day",
+    "total_caught", "total_fishers", "days_fished", "port", "target_species", "fishing_method", 
+    "bait_used", "block_id", "depth_ft", "species_name", "n_kept", "n_released", "id_vessel", 
+    "n_caught_by_crew", "species_type", "CPUE_p"
+         )
+```  
+
+###QAQC 
+```{r}
+na_summary_data_clean_pelagic_CA <- CPFV_pelagic_subset %>%
+  summarise(
+    na_cpue = sum(is.na(CPUE_p)), 
+    na_species_type = sum(is.na(species_type)), 
+    na_id_vessel= sum(is.na(id_vessel)), 
+    na_n_released= sum(is.na(n_released)), 
+    na_n_kept= sum(is.na(n_kept)), 
+    na_days_fished= sum(is.na(days_fished)), 
+    na_total_fisher= sum(is.na(total_fishers)),
+    na_total_caught= sum(is.na(total_caught)),
+    na_year = sum(is.na(year)),
+    na_year = sum(is.na(month)),
+    na_year = sum(is.na(day)),
   )
-  
-  
+View(na_summary_data_clean_pelagic_CA)
+```
+
+
+##Save dataframe
+```{r}
+saveRDS(CPFV_pelagic_subset, file.path(path_out, "CPFV_pelagic_species_subset.Rds"))
+```
+
+
+
+
+
+
+Not this:
+```{r}  
   data_clean%>% subset(comm_name_orig=="Barracuda, California"|
                                               comm_name_orig=="Bonito, Pacific"|
                                               comm_name_orig=="Anchovy, northern"|
